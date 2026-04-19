@@ -1,329 +1,232 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { addCredits, getBalance, removeCredits } = require("../utils/economy");
-
-const GRID_SIZE = 5;
-const TOTAL_BOMBS = 5;
-const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const economy = require('../utils/economy');
 
 class BombGame {
-  constructor(userId, betAmount) {
-    this.userId = userId;
-    this.betAmount = betAmount;
-    this.bombPositions = new Set();
-    this.revealedCells = new Set();
-    this.multiplier = 1.0;
-    this.isActive = true;
-    this.isCashedOut = false;
-    this.messageId = null;
-    this.channelId = null;
-    this.generateBombs();
-  }
-  
-  generateBombs() {
-    while (this.bombPositions.size < TOTAL_BOMBS) {
-      const pos = Math.floor(Math.random() * TOTAL_CELLS);
-      this.bombPositions.add(pos);
-    }
-  }
-  
-  revealCell(index) {
-    if (!this.isActive || this.revealedCells.has(index)) {
-      return { success: false, isBomb: false, gameOver: false };
+    constructor(userId, username, amount) {
+        this.userId = userId;
+        this.username = username;
+        this.amount = amount;
+        this.gridSize = 5; // Ubah ke 5x5 agar lebih mudah dilihat
+        this.totalCells = 25;
+        this.bombCount = 8; // 8 bom di grid 5x5
+        this.revealed = Array(this.totalCells).fill(false);
+        this.bombs = [];
+        this.multiplier = 1.0;
+        this.gameActive = true;
+        this.currentWinAmount = 0;
+        this.revealedCount = 0;
     }
     
-    this.revealedCells.add(index);
-    
-    if (this.bombPositions.has(index)) {
-      this.isActive = false;
-      return { success: true, isBomb: true, gameOver: true };
+    initGame() {
+        // Place bombs randomly
+        const bombIndices = new Set();
+        while (bombIndices.size < this.bombCount) {
+            bombIndices.add(Math.floor(Math.random() * this.totalCells));
+        }
+        this.bombs = Array.from(bombIndices);
     }
     
-    this.multiplier = parseFloat((this.multiplier * 1.2).toFixed(2));
-    return { success: true, isBomb: false, gameOver: false, multiplier: this.multiplier };
-  }
-  
-  cashout() {
-    if (!this.isActive || this.isCashedOut) {
-      return 0;
-    }
-    this.isCashedOut = true;
-    this.isActive = false;
-    return Math.floor(this.betAmount * this.multiplier);
-  }
-  
-  getCurrentWin() {
-    return Math.floor(this.betAmount * this.multiplier);
-  }
-  
-  // PERBAIKAN: Gabungkan grid ke dalam 3 ActionRow (maksimal 5 tombol per row)
-  getGridComponents() {
-    const components = [];
-    let currentRow = new ActionRowBuilder();
-    let buttonCount = 0;
-    
-    for (let i = 0; i < GRID_SIZE; i++) {
-      for (let j = 0; j < GRID_SIZE; j++) {
-        const index = i * GRID_SIZE + j;
-        const isRevealed = this.revealedCells.has(index);
-        const isBomb = this.bombPositions.has(index);
-        
-        let emoji = "❓";
-        let style = ButtonStyle.Secondary;
-        let disabled = false;
-        
-        if (!this.isActive) {
-          if (isBomb) {
-            emoji = "💣";
-            style = ButtonStyle.Danger;
-          } else if (isRevealed) {
-            emoji = "💎";
-            style = ButtonStyle.Success;
-          } else {
-            emoji = "⬛";
-            style = ButtonStyle.Secondary;
-          }
-          disabled = true;
-        } 
-        else if (isRevealed) {
-          emoji = "💎";
-          style = ButtonStyle.Success;
-          disabled = true;
+    async revealCell(index, interaction) {
+        if (!this.gameActive) {
+            return { gameOver: true, message: 'Game sudah berakhir!' };
         }
         
-        currentRow.addComponents(
-          new ButtonBuilder()
-            .setCustomId(`bomb_cell_${index}`)
-            .setEmoji(emoji)
-            .setStyle(style)
-            .setDisabled(disabled)
-        );
-        
-        buttonCount++;
-        
-        // Setiap 5 tombol, buat row baru
-        if (buttonCount === 5) {
-          components.push(currentRow);
-          currentRow = new ActionRowBuilder();
-          buttonCount = 0;
+        if (this.revealed[index]) {
+            return { gameOver: false, message: 'Kotak sudah terbuka!' };
         }
-      }
+        
+        if (this.bombs.includes(index)) {
+            // Hit bomb - game over
+            this.gameActive = false;
+            await economy.removeCredits(this.userId, this.amount);
+            
+            const gridDisplay = this.createGridDisplay(true);
+            const embed = this.createGameOverEmbed(gridDisplay);
+            
+            return { gameOver: true, embed, lossAmount: this.amount };
+        } else {
+            // Safe cell
+            this.revealed[index] = true;
+            this.revealedCount++;
+            this.multiplier = 1 + (this.revealedCount * 0.1); // +0.1x per tile
+            this.currentWinAmount = Math.floor(this.amount * this.multiplier);
+            
+            const gridDisplay = this.createGridDisplay(false);
+            const embed = this.createGameEmbed(gridDisplay);
+            
+            return { 
+                gameOver: false, 
+                embed, 
+                multiplier: this.multiplier, 
+                currentWin: this.currentWinAmount,
+                revealedCount: this.revealedCount
+            };
+        }
     }
     
-    // Push row terakhir jika ada tombol tersisa
-    if (buttonCount > 0) {
-      components.push(currentRow);
+    async cashout(interaction) {
+        if (!this.gameActive) {
+            return { success: false, message: 'Game sudah berakhir!' };
+        }
+        
+        if (this.currentWinAmount <= 0) {
+            return { success: false, message: 'Belum ada kemenangan untuk di-cashout!' };
+        }
+        
+        this.gameActive = false;
+        
+        // Get old balance untuk perhitungan
+        const oldBalance = await economy.getBalance(this.userId);
+        
+        // Process transaction
+        await economy.removeCredits(this.userId, this.amount);
+        await economy.addCredits(this.userId, this.currentWinAmount);
+        
+        // Get new balance
+        const newBalance = await economy.getBalance(this.userId);
+        
+        const gridDisplay = this.createGridDisplay(true);
+        const embed = this.createCashoutEmbed(gridDisplay, oldBalance, newBalance);
+        
+        return { success: true, embed, winAmount: this.currentWinAmount };
     }
     
-    return components;
-  }
-  
-  getActionComponents() {
-    const components = [];
-    const row = new ActionRowBuilder();
-    
-    if (this.isActive && !this.isCashedOut) {
-      const winAmount = this.getCurrentWin();
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId("bomb_cashout")
-          .setLabel(`💰 Cashout (${winAmount.toLocaleString()} credits)`)
-          .setStyle(ButtonStyle.Success)
-      );
+    createGridDisplay(revealAll = false) {
+        let grid = '';
+        for (let i = 0; i < this.gridSize; i++) {
+            let row = '';
+            for (let j = 0; j < this.gridSize; j++) {
+                const index = i * this.gridSize + j;
+                
+                if (revealAll) {
+                    // Show all bombs and gems
+                    if (this.bombs.includes(index)) {
+                        row += '💣 ';
+                    } else if (this.revealed[index]) {
+                        row += '💎 ';
+                    } else {
+                        row += '⬜ ';
+                    }
+                } else {
+                    // Only show revealed tiles
+                    if (this.revealed[index]) {
+                        row += '💎 ';
+                    } else {
+                        row += '⬛ ';
+                    }
+                }
+            }
+            grid += row + '\n';
+        }
+        return grid;
     }
     
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("back_to_casino")
-        .setLabel("🎰 Casino Menu")
-        .setStyle(ButtonStyle.Secondary)
-    );
-    
-    components.push(row);
-    return components;
-  }
-  
-  getAllComponents() {
-    return [...this.getGridComponents(), ...this.getActionComponents()];
-  }
-  
-  getEmbed() {
-    const embed = new EmbedBuilder()
-      .setTitle("💣 **MINES - BOMB SQUAD** 💣")
-      .setColor(this.isActive ? 0x00ff00 : (this.isCashedOut ? 0xffaa00 : 0xff0000))
-      .addFields(
-        { name: "💰 **Taruhan**", value: `${this.betAmount.toLocaleString()} credits`, inline: true },
-        { name: "🎯 **Multiplier**", value: `${this.multiplier.toFixed(2)}x`, inline: true },
-        { name: "💎 **Selamat**", value: `${this.revealedCells.size} kotak`, inline: true },
-        { name: "💣 **Bom**", value: `${TOTAL_BOMBS} bom`, inline: true },
-        { name: "🎁 **Potensi Menang**", value: `${this.getCurrentWin().toLocaleString()} credits`, inline: true }
-      )
-      .setTimestamp();
-    
-    if (!this.isActive && !this.isCashedOut) {
-      embed.setDescription("💥 **KAMU KENA BOM!** Semua taruhan hangus! 💥");
-      embed.setColor(0xff0000);
-    } else if (this.isCashedOut) {
-      const winAmount = this.getCurrentWin();
-      embed.setDescription(`✅ **CASHOUT BERHASIL!** Kamu mendapatkan **${winAmount.toLocaleString()}** credits! ✅`);
-      embed.setColor(0xffaa00);
-    } else {
-      embed.setDescription(`⚡ **Grid 5x5** dengan **${TOTAL_BOMBS} bom** tersembunyi\n💎 Setiap kotak aman = multiplier +20%\n💣 Kena bom = kalah semua\n💰 Cashout kapan saja!`);
+    createGameEmbed(gridDisplay) {
+        const profit = this.currentWinAmount - this.amount;
+        const profitSymbol = profit >= 0 ? '+' : '';
+        
+        const embed = new EmbedBuilder()
+            .setColor('#ffd700')
+            .setTitle('💣 MINES GAME 💣')
+            .setDescription(`\`\`\`\n${gridDisplay}\n\`\`\``)
+            .addFields(
+                { name: '🎯 Tiles Revealed', value: `${this.revealedCount}`, inline: true },
+                { name: '📊 Multiplier', value: `x${this.multiplier.toFixed(2)}`, inline: true },
+                { name: '💰 Current Win', value: `${this.currentWinAmount.toLocaleString()} 🪙`, inline: true },
+                { name: '📈 Profit', value: `${profitSymbol}${profit.toLocaleString()} 🪙`, inline: true },
+                { name: '💣 Bombs Left', value: `${this.bombCount - this.bombs.filter(b => !this.revealed.includes(b)).length}`, inline: true },
+                { name: '🎲 Safe Tiles', value: `${this.totalCells - this.bombCount - this.revealedCount}`, inline: true }
+            )
+            .setFooter({ text: `Dimainkan oleh ${this.username} | Klik 💰 CASHOUT untuk mengambil kemenangan` });
+        
+        return embed;
     }
     
-    return embed;
-  }
+    createGameOverEmbed(gridDisplay) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('💣 GAME OVER! 💀')
+            .setDescription(`\`\`\`\n${gridDisplay}\n\`\`\``)
+            .addFields(
+                { name: '💥 You Hit a Bomb!', value: `Kena bom dan kehilangan semua taruhan!`, inline: false },
+                { name: '💰 Taruhan', value: `${this.amount.toLocaleString()} 🪙`, inline: true },
+                { name: '💸 Loss', value: `${this.amount.toLocaleString()} 🪙`, inline: true },
+                { name: '🎯 Tiles Revealed', value: `${this.revealedCount}`, inline: true }
+            )
+            .setFooter({ text: `Dimainkan oleh ${this.username} | Coba lagi lain kali!` });
+        
+        return embed;
+    }
+    
+    createCashoutEmbed(gridDisplay, oldBalance, newBalance) {
+        const profit = this.currentWinAmount - this.amount;
+        const profitSymbol = profit >= 0 ? '+' : '';
+        
+        const embed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('✅ CASHED OUT! 🎉')
+            .setDescription(`\`\`\`\n${gridDisplay}\n\`\`\``)
+            .addFields(
+                { name: '🎯 Tiles Revealed', value: `${this.revealedCount}`, inline: true },
+                { name: '📊 Multiplier', value: `x${this.multiplier.toFixed(2)}`, inline: true },
+                { name: '💰 Gross Win', value: `+${this.currentWinAmount.toLocaleString()} 🪙`, inline: true },
+                { name: '📈 Profit', value: `${profitSymbol}${profit.toLocaleString()} 🪙`, inline: true },
+                { name: '💼 Old Balance', value: `${oldBalance.toLocaleString()} 🪙`, inline: true },
+                { name: '🆕 New Balance', value: `${newBalance.toLocaleString()} 🪙`, inline: true }
+            )
+            .setFooter({ text: `Dimainkan oleh ${this.username} | Selamat! 🎊` });
+        
+        return embed;
+    }
+    
+    createGridButtons() {
+        const rows = [];
+        for (let i = 0; i < this.gridSize; i++) {
+            const row = new ActionRowBuilder();
+            for (let j = 0; j < this.gridSize; j++) {
+                const index = i * this.gridSize + j;
+                let emoji = '⬛';
+                let disabled = false;
+                
+                if (this.revealed[index]) {
+                    emoji = '💎';
+                    disabled = true;
+                }
+                
+                // Use different button styles based on position
+                let style = ButtonStyle.Secondary;
+                if (this.revealed[index]) {
+                    style = ButtonStyle.Success;
+                }
+                
+                row.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`bomb_${index}`)
+                        .setLabel(emoji)
+                        .setStyle(style)
+                        .setDisabled(disabled)
+                );
+            }
+            rows.push(row);
+        }
+        
+        const cashoutRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('bomb_cashout')
+                    .setLabel('💰 CASHOUT')
+                    .setStyle(ButtonStyle.Success)
+                    .setDisabled(!this.gameActive || this.revealedCount === 0),
+                new ButtonBuilder()
+                    .setCustomId('bomb_grid')
+                    .setLabel('🎲 REVEAL GRID')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(true) // Just for display
+            );
+        
+        rows.push(cashoutRow);
+        return rows;
+    }
 }
 
-const activeGames = new Map();
-
-async function executeBomb(messageOrInteraction, amount) {
-  try {
-    console.log(`[BOMB] Starting game for user with amount ${amount}`);
-    
-    const isMessage = messageOrInteraction.author !== undefined;
-    const user = isMessage ? messageOrInteraction.author : messageOrInteraction.user;
-    
-    console.log(`[BOMB] User: ${user.username}, IsMessage: ${isMessage}`);
-    
-    const balance = await getBalance(user.id);
-    
-    if (amount < 10) {
-      if (isMessage) {
-        return messageOrInteraction.reply("❌ Minimal taruhan adalah **10 credits**!");
-      } else {
-        return messageOrInteraction.reply({ content: "❌ Minimal taruhan adalah **10 credits**!", ephemeral: true });
-      }
-    }
-    
-    if (balance < amount) {
-      if (isMessage) {
-        return messageOrInteraction.reply(`❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits`);
-      } else {
-        return messageOrInteraction.reply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits`, ephemeral: true });
-      }
-    }
-    
-    await removeCredits(user.id, amount, "bomb");
-    console.log(`[BOMB] Removed ${amount} credits from ${user.id}`);
-    
-    const game = new BombGame(user.id, amount);
-    activeGames.set(user.id, game);
-    console.log(`[BOMB] Game created for ${user.id}`);
-    
-    const components = game.getAllComponents();
-    
-    if (isMessage) {
-      const sentMessage = await messageOrInteraction.reply({
-        embeds: [game.getEmbed()],
-        components: components
-      });
-      game.messageId = sentMessage.id;
-      game.channelId = messageOrInteraction.channel.id;
-    } else {
-      if (!messageOrInteraction.deferred && !messageOrInteraction.replied) {
-        await messageOrInteraction.deferReply();
-      }
-      const reply = await messageOrInteraction.editReply({
-        embeds: [game.getEmbed()],
-        components: components
-      });
-      game.messageId = reply.id;
-      game.channelId = messageOrInteraction.channelId;
-    }
-    
-    return true;
-    
-  } catch (error) {
-    console.error("[BOMB] Error in executeBomb:", error);
-    
-    if (messageOrInteraction.author) {
-      return messageOrInteraction.reply("❌ Terjadi kesalahan saat memulai game Bomb!");
-    } else {
-      if (!messageOrInteraction.replied) {
-        return messageOrInteraction.reply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!", ephemeral: true });
-      }
-    }
-  }
-}
-
-async function handleBombInteraction(interaction) {
-  try {
-    console.log(`[BOMB] Handling interaction: ${interaction.customId} for user ${interaction.user.id}`);
-    
-    const game = activeGames.get(interaction.user.id);
-    
-    if (!game) {
-      return interaction.reply({ 
-        content: "❌ Tidak ada game Bomb yang aktif! Gunakan `!bomb <jumlah>` untuk memulai.", 
-        ephemeral: true 
-      });
-    }
-    
-    if (!game.isActive) {
-      activeGames.delete(interaction.user.id);
-      return interaction.update({
-        content: "❌ Game sudah berakhir! Gunakan `!bomb <jumlah>` untuk bermain lagi.",
-        components: [],
-        embeds: []
-      });
-    }
-    
-    if (interaction.customId === "bomb_cashout") {
-      console.log(`[BOMB] Cashout from ${interaction.user.id}`);
-      const winAmount = game.cashout();
-      
-      if (winAmount > 0) {
-        await addCredits(interaction.user.id, winAmount, "bomb");
-        console.log(`[BOMB] Added ${winAmount} credits to ${interaction.user.id}`);
-      }
-      
-      activeGames.delete(interaction.user.id);
-      
-      const components = game.getAllComponents();
-      return interaction.update({
-        embeds: [game.getEmbed()],
-        components: components
-      });
-    }
-    
-    if (interaction.customId.startsWith("bomb_cell_")) {
-      const cellIndex = parseInt(interaction.customId.split("_")[2]);
-      console.log(`[BOMB] Cell ${cellIndex} clicked by ${interaction.user.id}`);
-      
-      const result = game.revealCell(cellIndex);
-      console.log(`[BOMB] Result: isBomb=${result.isBomb}, gameOver=${result.gameOver}, multiplier=${game.multiplier}`);
-      
-      if (!result.success) {
-        return interaction.deferUpdate();
-      }
-      
-      if (result.isBomb) {
-        console.log(`[BOMB] Game over for ${interaction.user.id} - KENA BOM!`);
-        activeGames.delete(interaction.user.id);
-      }
-      
-      const components = game.getAllComponents();
-      return interaction.update({
-        embeds: [game.getEmbed()],
-        components: components
-      });
-    }
-    
-    return interaction.deferUpdate();
-    
-  } catch (error) {
-    console.error("[BOMB] Error in handleBombInteraction:", error);
-    return interaction.reply({ content: "❌ Terjadi kesalahan dalam game Bomb!", ephemeral: true });
-  }
-}
-
-setInterval(() => {
-  for (const [userId, game] of activeGames.entries()) {
-    if (!game.isActive) {
-      activeGames.delete(userId);
-    }
-  }
-  console.log(`[BOMB] Cleanup: ${activeGames.size} active games remaining`);
-}, 600000);
-
-module.exports = { executeBomb, handleBombInteraction };
+module.exports = BombGame;

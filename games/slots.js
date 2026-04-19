@@ -61,7 +61,7 @@ async function executeSlots(interaction, amount) {
   const embed = new EmbedBuilder()
     .setTitle("🎰 **SLOT MACHINE** 🎰")
     .setColor(embedColor)
-    .setDescription(`\`\`\`\n┌─────┬─────┬─────┐\n│ ${slot1} │ ${slot2} │ ${slot3} │\n└─────┴─────┴─────┘\n\`\`\``)
+    .setDescription(`\`\`\`\n┌─────┬─────┬─────┐\n│ ${slot1}  │ ${slot2}   │ ${slot3}    │\n└─────┴─────┴─────┘\n\`\`\``)
     .addFields(
       { name: "📊 **Hasil**", value: resultText, inline: false },
       { name: "💰 **Taruhan**", value: `${amount.toLocaleString()} credits`, inline: true }

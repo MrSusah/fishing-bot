@@ -1,9 +1,14 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
-const { isGameAllowedInChannel } = require("../utils/channelValidator");
-const { executeHunt } = require("../games/hunt");
-const { executeDungeon } = require("../games/dungeon");
-const { executeFishing } = require("../games/fishing");
-const { executeBomb, handleBombInteraction } = require("../games/bomb");
+const { isGameAllowedInChannel, HUNT_CHANNEL_ID, CASINO_CHANNEL_ID } = require("../utils/channelValidator");
+const HuntGame = require("../games/hunt");
+const DungeonGame = require("../games/dungeon");
+const FishingGame = require("../games/fishing");
+const CoinFlipGame = require("../games/cf");
+const RPSGame = require("../games/rps");
+const SlotsGame = require("../games/slots");
+const RouletteGame = require("../games/roulette");
+const DaduGame = require("../games/dadu");
+const BombGame = require("../games/bomb");
 
 const buttonCooldowns = new Map();
 
@@ -17,11 +22,7 @@ function hasButtonCooldown(userId, buttonId) {
   return false;
 }
 
-async function handleGameMenu(interaction) {
-  if (hasButtonCooldown(interaction.user.id, "game_menu")) {
-    return interaction.reply({ content: "⏳ Tombol sedang diproses, jangan spam!" });
-  }
-  
+function createGameMenu() {
   const embed = new EmbedBuilder()
     .setTitle("🎮 **GAME MENU** 🎮")
     .setDescription("Pilih game yang ingin dimainkan!")
@@ -39,14 +40,10 @@ async function handleGameMenu(interaction) {
     new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Menu Utama").setStyle(ButtonStyle.Secondary)
   );
   
-  return interaction.reply({ embeds: [embed], components: [row1, row2] });
+  return { embed, components: [row1, row2] };
 }
 
-async function handleCasinoMenu(interaction) {
-  if (hasButtonCooldown(interaction.user.id, "casino_menu")) {
-    return interaction.reply({ content: "⏳ Tombol sedang diproses, jangan spam!" });
-  }
-  
+function createCasinoMenu() {
   const embed = new EmbedBuilder()
     .setTitle("🎰 **CASINO MENU** 🎰")
     .setDescription("**Pilih permainan kasino:**\n\n" +
@@ -74,139 +71,265 @@ async function handleCasinoMenu(interaction) {
     new ButtonBuilder().setCustomId("back_to_game_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
   );
   
-  return interaction.reply({ embeds: [embed], components: [row1, row2] });
+  return { embed, components: [row1, row2] };
+}
+
+async function handleGameMenu(interaction) {
+  if (hasButtonCooldown(interaction.user.id, "game_menu")) {
+    return interaction.reply({ content: "⏳ Tombol sedang diproses, jangan spam!", ephemeral: true });
+  }
+  
+  const { embed, components } = createGameMenu();
+  return interaction.update({ embeds: [embed], components });
+}
+
+async function handleCasinoMenu(interaction) {
+  if (hasButtonCooldown(interaction.user.id, "casino_menu")) {
+    return interaction.reply({ content: "⏳ Tombol sedang diproses, jangan spam!", ephemeral: true });
+  }
+  
+  const { embed, components } = createCasinoMenu();
+  return interaction.update({ embeds: [embed], components });
 }
 
 async function handleGameButton(interaction, client) {
   const channelId = interaction.channelId;
   const customId = interaction.customId;
   
-  // Handle direct game buttons
+  // Defer reply untuk menghindari timeout
+  await interaction.deferReply({ ephemeral: false });
+  
+  // Handle HUNT
   if (customId === "game_hunt") {
     if (!isGameAllowedInChannel(channelId, "hunt")) {
-      return interaction.reply({ 
-        content: `❌ Game **Hunt** hanya bisa dimainkan di **Zona Hutan**! Gunakan channel <#1495049686363410535>`
+      return interaction.editReply({ 
+        content: `❌ Game **Hunt** hanya bisa dimainkan di **Zona Hutan**! Gunakan channel <#${HUNT_CHANNEL_ID}>`
       });
     }
-    return executeHunt(interaction);
+    const result = await HuntGame.play(interaction.user.id, interaction.user.username);
+    if (result.message) {
+      return interaction.editReply({ content: result.message });
+    }
+    return interaction.editReply({ embeds: [result.embed] });
   }
   
+  // Handle DUNGEON
   if (customId === "game_dungeon") {
     if (!isGameAllowedInChannel(channelId, "dungeon")) {
-      return interaction.reply({ 
-        content: `❌ Game **Dungeon** hanya bisa dimainkan di **Zona Hutan**! Gunakan channel <#1495049686363410535>`
+      return interaction.editReply({ 
+        content: `❌ Game **Dungeon** hanya bisa dimainkan di **Zona Hutan**! Gunakan channel <#${HUNT_CHANNEL_ID}>`
       });
     }
-    return executeDungeon(interaction);
+    const result = await DungeonGame.play(interaction.user.id, interaction.user.username);
+    if (result.message) {
+      return interaction.editReply({ content: result.message });
+    }
+    return interaction.editReply({ embeds: [result.embed] });
   }
   
+  // Handle FISHING
   if (customId === "game_fishing" || customId === "casino_fishing") {
-    return executeFishing(interaction, client);
+    const result = await FishingGame.play(interaction.user.id, interaction.user.username);
+    if (result.message) {
+      return interaction.editReply({ content: result.message });
+    }
+    return interaction.editReply({ embeds: [result.embed] });
   }
   
+  // Handle GAME CASINO (navigate to casino menu)
   if (customId === "game_casino") {
-    return handleCasinoMenu(interaction);
+    const { embed, components } = createCasinoMenu();
+    return interaction.editReply({ embeds: [embed], components });
   }
   
-  // Handle casino buttons
+  // Handle CASINO CF
   if (customId === "casino_cf") {
     if (!isGameAllowedInChannel(channelId, "cf")) {
-      return interaction.reply({ 
-        content: `❌ Game **Coin Flip** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      return interaction.editReply({ 
+        content: `❌ Game **Coin Flip** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
       });
     }
-    return interaction.reply({
-      content: "🪙 **Coin Flip**\nGunakan command: `!cf <kepala/ekor> <jumlah>`\n\nContoh: `!cf kepala 1000`\n\n| Menang x2"
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("🪙 **Coin Flip**")
+      .setDescription("Gunakan command: `!cf <kepala/ekor> <jumlah>`")
+      .addFields(
+        { name: "📋 Contoh", value: "`!cf kepala 1000`", inline: true },
+        { name: "💰 Pembayaran", value: "Menang x2", inline: true },
+        { name: "📊 Chance", value: "30%", inline: true }
+      )
+      .setColor(0xffaa00);
+    return interaction.editReply({ embeds: [embed] });
   }
   
+  // Handle CASINO RPS
   if (customId === "casino_rps") {
     if (!isGameAllowedInChannel(channelId, "rps")) {
-      return interaction.reply({ 
-        content: `❌ Game **RPS** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      return interaction.editReply({ 
+        content: `❌ Game **RPS** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
       });
     }
-    return interaction.reply({
-      content: "✊ **Rock Paper Scissors**\nGunakan command: `!rps <rock/paper/scissors> <jumlah>`\n\nContoh: `!rps rock 1000`\n\n💡 Menang x2 | Seri uang kembali"
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("✊ **Rock Paper Scissors**")
+      .setDescription("Gunakan command: `!rps <rock/paper/scissors> <jumlah>`")
+      .addFields(
+        { name: "📋 Contoh", value: "`!rps rock 1000`", inline: true },
+        { name: "💰 Pembayaran", value: "Menang x2 | Seri uang kembali", inline: true }
+      )
+      .setColor(0xffaa00);
+    return interaction.editReply({ embeds: [embed] });
   }
   
+  // Handle CASINO SLOTS
   if (customId === "casino_slots") {
     if (!isGameAllowedInChannel(channelId, "slots")) {
-      return interaction.reply({ 
-        content: `❌ Game **Slots** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      return interaction.editReply({ 
+        content: `❌ Game **Slots** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
       });
     }
-    return interaction.reply({
-      content: "🎰 **Slot Machine**\nGunakan command: `!slots <jumlah>`\n\nContoh: `!slots 1000`\n\n💡 Pair x1.5 | Triple x3-10 | Jackpot x15"
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("🎰 **Slot Machine**")
+      .setDescription("Gunakan command: `!slots <jumlah>`")
+      .addFields(
+        { name: "📋 Contoh", value: "`!slots 1000`", inline: true },
+        { name: "💰 Pembayaran", value: "Pair x1.5 | Triple x3-10 | Jackpot x15", inline: true }
+      )
+      .setColor(0xffaa00);
+    return interaction.editReply({ embeds: [embed] });
   }
   
+  // Handle CASINO ROULETTE
   if (customId === "casino_roulette") {
     if (!isGameAllowedInChannel(channelId, "roulette")) {
-      return interaction.reply({ 
-        content: `❌ Game **Roulette** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      return interaction.editReply({ 
+        content: `❌ Game **Roulette** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
       });
     }
-    return interaction.reply({
-      content: "🎡 **Roulette**\nGunakan command: `!roulette <jumlah> <side>`\n\nSide: `red`, `black`, `green`, `odd`, `even`, atau `0-36`\n\nContoh: `!roulette 1000 red`\n\n💡 Red/Black x2 | Odd/Even x2 | Green x17 | Single x36"
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("🎡 **Roulette**")
+      .setDescription("Gunakan command: `!roulette <jumlah> <side>`")
+      .addFields(
+        { name: "📋 Side", value: "`red`, `black`, `green`, `odd`, `even`, atau `0-36`", inline: false },
+        { name: "📋 Contoh", value: "`!roulette 1000 red`", inline: true },
+        { name: "💰 Pembayaran", value: "Red/Black x2 | Odd/Even x2 | Green x17 | Single x36", inline: true }
+      )
+      .setColor(0xffaa00);
+    return interaction.editReply({ embeds: [embed] });
   }
   
+  // Handle CASINO DADU
   if (customId === "casino_dadu") {
     if (!isGameAllowedInChannel(channelId, "dadu")) {
-      return interaction.reply({ 
-        content: `❌ Game **Dadu** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      return interaction.editReply({ 
+        content: `❌ Game **Dadu** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
       });
     }
-    return interaction.reply({
-      content: "🎲 **Dadu High/Low**\nGunakan command: `!dadu <high/low> <jumlah>`\n\nContoh: `!dadu high 1000`\n\n💡 High (4-6) menang | Low (1-3) menang | Menang x2\n💰 Maks taruhan: 3000 credits"
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("🎲 **Dadu High/Low**")
+      .setDescription("Gunakan command: `!dadu <high/low> <jumlah>`")
+      .addFields(
+        { name: "📋 Contoh", value: "`!dadu high 1000`", inline: true },
+        { name: "🎯 Aturan", value: "High (4-6) menang | Low (1-3) menang", inline: true },
+        { name: "💰 Pembayaran", value: "Menang x2 | Maks taruhan: 3000 credits", inline: true }
+      )
+      .setColor(0xffaa00);
+    return interaction.editReply({ embeds: [embed] });
   }
   
+  // Handle CASINO BOMB
   if (customId === "casino_bomb") {
     if (!isGameAllowedInChannel(channelId, "bomb")) {
-      return interaction.reply({ 
-        content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      return interaction.editReply({ 
+        content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
       });
     }
-    return interaction.reply({
-      content: "💣 **Bomb Squad - Minesweeper Style** 💣\n\n" +
-        "🎮 **Cara Bermain:**\n" +
-        "Gunakan command: `!bomb <jumlah>`\n\n" +
-        "📋 **Contoh:** `!bomb 1000`\n\n" +
-        "⚡ **Aturan Main:**\n" +
-        "• Grid **5x5** dengan **5 bom** tersembunyi\n" +
-        "• Klik kotak untuk membuka (❓)\n" +
-        "• 💎 Kotak aman = multiplier +20%\n" +
-        "• 💣 Kena bom = kalah semua\n" +
-        "• 💰 Cashout kapan saja untuk ambil kemenangan\n\n" +
-        "🎁 **Multiplier progresif:** Setiap kotak aman menambah kemenangan!"
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("💣 **Bomb Squad - Minesweeper Style**")
+      .setDescription("Gunakan command: `!bomb <jumlah>`\n\n📋 **Contoh:** `!bomb 1000`")
+      .addFields(
+        { name: "⚡ **Aturan Main**", value: 
+          "• Grid **5x5** dengan **8 bom** tersembunyi\n" +
+          "• Klik kotak untuk membuka\n" +
+          "• 💎 Kotak aman = multiplier +10%\n" +
+          "• 💣 Kena bom = kalah semua\n" +
+          "• 💰 Cashout kapan saja untuk ambil kemenangan\n" +
+          "• 💰 Maks taruhan: 1000 credits", inline: false }
+      )
+      .setColor(0xffaa00);
+    return interaction.editReply({ embeds: [embed] });
   }
   
-  // Handle back buttons
+  // Handle BACK TO GAME MENU
   if (customId === "back_to_game_menu") {
-    return handleGameMenu(interaction);
+    const { embed, components } = createGameMenu();
+    return interaction.editReply({ embeds: [embed], components });
   }
   
+  // Handle BACK TO CASINO
   if (customId === "back_to_casino") {
-    return handleCasinoMenu(interaction);
+    const { embed, components } = createCasinoMenu();
+    return interaction.editReply({ embeds: [embed], components });
   }
   
-  // Handle bomb interactions (cell clicks and cashout)
-  if (customId.startsWith("bomb_cell_") || customId === "bomb_cashout") {
-    return handleBombInteraction(interaction);
+  // Handle BACK TO MAIN MENU (dari game menu)
+  if (customId === "back_to_main_menu") {
+    return interaction.editReply({ 
+      content: "🔙 Kembali ke menu utama. Ketik `!fishing` untuk membuka menu utama!",
+      components: []
+    });
   }
   
   // Jika tidak ada yang cocok
   console.log(`[WARNING] Unknown button: ${customId}`);
-  return interaction.reply({ content: "❌ Game tidak ditemukan!" });
+  return interaction.editReply({ content: "❌ Game tidak ditemukan!" });
+}
+
+async function handleBombGameInteraction(interaction, client) {
+  const customId = interaction.customId;
+  
+  // Handle bomb cell clicks
+  if (customId.startsWith("bomb_")) {
+    const bombGame = client.bombGames?.get(interaction.user.id);
+    if (!bombGame) {
+      return interaction.reply({ 
+        content: "❌ Game tidak ditemukan! Mulai game baru dengan `!bomb <jumlah>`", 
+        ephemeral: true 
+      });
+    }
+    
+    const [action, param] = customId.split('_');
+    
+    if (action === 'bomb') {
+      if (param === 'cashout') {
+        await interaction.deferUpdate();
+        const result = await bombGame.cashout(interaction);
+        if (result.success) {
+          await interaction.editReply({ embeds: [result.embed], components: [] });
+          client.bombGames.delete(interaction.user.id);
+        } else {
+          await interaction.followUp({ content: result.message, ephemeral: true });
+        }
+      } else {
+        const cellIndex = parseInt(param);
+        await interaction.deferUpdate();
+        const result = await bombGame.revealCell(cellIndex, interaction);
+        
+        if (result.gameOver) {
+          await interaction.editReply({ embeds: [result.embed], components: [] });
+          client.bombGames.delete(interaction.user.id);
+        } else {
+          const newGrid = bombGame.createGridButtons();
+          await interaction.editReply({ embeds: [result.embed], components: newGrid });
+        }
+      }
+    }
+  }
 }
 
 module.exports = {
+  createGameMenu,
+  createCasinoMenu,
   handleGameMenu,
   handleCasinoMenu,
   handleGameButton,
-  handleBombInteraction
+  handleBombGameInteraction
 };
