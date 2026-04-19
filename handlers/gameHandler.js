@@ -23,7 +23,7 @@ async function handleGameMenu(interaction) {
   
   const embed = new EmbedBuilder()
     .setTitle("🎮 **GAME MENU** 🎮")
-    .setDescription("Pilih game yang ingin dimainkan!")
+    .setDescription("Pilih menu di bawah ini!")
     .setColor(0x5865f2)
     .setTimestamp();
   
@@ -35,6 +35,7 @@ async function handleGameMenu(interaction) {
   );
   
   const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("game_profile").setLabel("👤 Profile").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Menu Utama").setStyle(ButtonStyle.Secondary)
   );
   
@@ -138,7 +139,23 @@ async function handleGameButton(interaction, client) {
       content: "🎰 **Slot Machine**\nGunakan command: `!slots <jumlah>`\n\nContoh: `!slots 1000`\n\n💡 Pair x1.5 | Triple x3-10 | Jackpot x15"
     });
   }
-  
+  // Di dalam fungsi handleGameButton, tambahkan:
+if (customId === "game_profile") {
+  // Panggil fungsi profile dari index.js atau buat di sini
+  // Kita akan buat interaction untuk profile
+  const fakeInteraction = {
+    ...interaction,
+    customId: "menu_profile",
+    reply: interaction.reply.bind(interaction),
+    deferReply: interaction.deferReply.bind(interaction),
+    editReply: interaction.editReply.bind(interaction),
+    update: interaction.update?.bind(interaction)
+  };
+  // Kita perlu akses ke fungsi profile dari index.js
+  // Sementara kita kirim event ke index.js
+  return interaction.client.emit('profileRequest', fakeInteraction);
+
+}
   if (customId === "casino_roulette") {
     if (!isGameAllowedInChannel(channelId, "roulette")) {
       return interaction.reply({ 
