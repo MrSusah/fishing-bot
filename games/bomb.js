@@ -6,9 +6,9 @@ class BombGame {
         this.userId = userId;
         this.username = username;
         this.amount = amount;
-        this.gridSize = 5; // Ubah ke 5x5 agar lebih mudah dilihat
+        this.gridSize = 5; // 5x5 grid
         this.totalCells = 25;
-        this.bombCount = 8; // 8 bom di grid 5x5
+        this.bombCount = 8; // 8 bombs in 5x5 grid
         this.revealed = Array(this.totalCells).fill(false);
         this.bombs = [];
         this.multiplier = 1.0;
@@ -193,7 +193,6 @@ class BombGame {
                     disabled = true;
                 }
                 
-                // Use different button styles based on position
                 let style = ButtonStyle.Secondary;
                 if (this.revealed[index]) {
                     style = ButtonStyle.Success;
@@ -218,10 +217,10 @@ class BombGame {
                     .setStyle(ButtonStyle.Success)
                     .setDisabled(!this.gameActive || this.revealedCount === 0),
                 new ButtonBuilder()
-                    .setCustomId('bomb_grid')
-                    .setLabel('🎲 REVEAL GRID')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(true) // Just for display
+                    .setCustomId('bomb_info')
+                    .setLabel(`🎯 ${this.revealedCount}/25`)
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(true)
             );
         
         rows.push(cashoutRow);
@@ -229,4 +228,227 @@ class BombGame {
     }
 }
 
-module.exports = BombGame;
+// ================= FUNGSI UNTUK MESSAGE COMMAND =================
+async function executeBomb(message, amount) {
+    try {
+        // Validasi amount
+        if (isNaN(amount) || amount < 10) {
+            return message.reply("❌ Minimal taruhan adalah **10 credits**!");
+        }
+        
+        if (amount > 1000) {
+            return message.reply("❌ Maksimal taruhan untuk game bomb adalah **1000 credits**!");
+        }
+        
+        // Cek saldo
+        const balance = await economy.getBalance(message.author.id);
+        if (balance < amount) {
+            return message.reply(`❌ Saldo tidak cukup! Kamu memiliki ${balance.toLocaleString()} credits.`);
+        }
+        
+        // Buat game instance
+        const bombGame = new BombGame(message.author.id, message.author.username, amount);
+        bombGame.initGame();
+        
+        // Simpan ke client
+        if (!message.client.bombGames) message.client.bombGames = new Map();
+        message.client.bombGames.set(message.author.id, bombGame);
+        
+        // Tampilkan grid awal
+        const gridDisplay = bombGame.createGridDisplay(false);
+        const embed = bombGame.createGameEmbed(gridDisplay);
+        const buttons = bombGame.createGridButtons();
+        
+        return message.reply({ embeds: [embed], components: buttons });
+    } catch (error) {
+        console.error('Error in executeBomb:', error);
+        return message.reply('❌ Terjadi kesalahan saat memulai game!');
+    }
+}
+
+// ================= FUNGSI UNTUK HANDLE BUTTON INTERACTION =================
+async function handleBombInteraction(interaction, client) {
+    try {
+        // Pastikan bombGames ada
+        if (!client.bombGames) client.bombGames = new Map();
+        
+        const bombGame = client.bombGames.get(interaction.user.id);
+        
+        if (!bombGame) {
+            return interaction.reply({ 
+                content: "❌ Game tidak ditemukan! Mulai game baru dengan `!bomb <jumlah>`", 
+                ephemeral: true 
+            });
+        }
+        
+        const customId = interaction.customId;
+        
+        // Handle cashout
+        if (customId === 'bomb_cashout') {
+            await interaction.deferUpdate();
+            const result = await bombGame.cashout(interaction);
+            
+            if (result.success) {
+                await interaction.editReply({ embeds: [result.embed], components: [] });
+                client.bombGames.delete(interaction.user.id);
+            } else {
+                await interaction.followUp({ content: result.message, ephemeral: true });
+            }
+            return;
+        }
+        
+        // Handle cell clicks (bomb_0 sampai bomb_24)
+        if (customId.startsWith('bomb_')) {
+            const cellIndex = parseInt(customId.split('_')[1]);
+            
+            if (isNaN(cellIndex)) {
+                return interaction.reply({ content: '❌ Invalid cell!', ephemeral: true });
+            }
+            
+            await interaction.deferUpdate();
+            const result = await bombGame.revealCell(cellIndex, interaction);
+            
+            if (result.gameOver) {
+                await interaction.editReply({ embeds: [result.embed], components: [] });
+                client.bombGames.delete(interaction.user.id);
+            } else {
+                const newButtons = bombGame.createGridButtons();
+                await interaction.editReply({ embeds: [result.embed], components: newButtons });
+            }
+            return;
+        }
+        
+        // Unknown button
+        return interaction.reply({ content: '❌ Tombol tidak dikenal!', ephemeral: true });
+        
+    } catch (error) {
+        console.error('Error in handleBombInteraction:', error);
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: '❌ Terjadi kesalahan dalam game!', ephemeral: true });
+            } else {
+                await interaction.editReply({ content: '❌ Terjadi kesalahan dalam game!' });
+            }
+        } catch (e) {
+            console.error('Failed to send error response:', e);
+        }
+        client.bombGames?.delete(interaction.user.id);
+    }
+}
+
+async function executeBomb(message, amount) {
+    try {
+        const economy = require('../utils/economy');
+        
+        // Validasi amount
+        if (isNaN(amount) || amount < 10) {
+            return message.reply("❌ Minimal taruhan adalah **10 credits**!");
+        }
+        
+        if (amount > 1000) {
+            return message.reply("❌ Maksimal taruhan untuk game bomb adalah **1000 credits**!");
+        }
+        
+        // Cek saldo
+        const balance = await economy.getBalance(message.author.id);
+        if (balance < amount) {
+            return message.reply(`❌ Saldo tidak cukup! Kamu memiliki ${balance.toLocaleString()} credits.`);
+        }
+        
+        // Buat game instance
+        const bombGame = new BombGame(message.author.id, message.author.username, amount);
+        bombGame.initGame();
+        
+        // Simpan ke client
+        if (!message.client.bombGames) message.client.bombGames = new Map();
+        message.client.bombGames.set(message.author.id, bombGame);
+        
+        // Tampilkan grid awal
+        const gridDisplay = bombGame.createGridDisplay(false);
+        const embed = bombGame.createGameEmbed(gridDisplay);
+        const buttons = bombGame.createGridButtons();
+        
+        return message.reply({ embeds: [embed], components: buttons });
+    } catch (error) {
+        console.error('Error in executeBomb:', error);
+        return message.reply('❌ Terjadi kesalahan saat memulai game!');
+    }
+}
+
+// ================= FUNGSI UNTUK HANDLE BUTTON INTERACTION =================
+async function handleBombInteraction(interaction, client) {
+    try {
+        // Pastikan bombGames ada
+        if (!client.bombGames) client.bombGames = new Map();
+        
+        const bombGame = client.bombGames.get(interaction.user.id);
+        
+        if (!bombGame) {
+            return interaction.reply({ 
+                content: "❌ Game tidak ditemukan! Mulai game baru dengan `!bomb <jumlah>`", 
+                ephemeral: true 
+            });
+        }
+        
+        const customId = interaction.customId;
+        
+        // Handle cashout
+        if (customId === 'bomb_cashout') {
+            await interaction.deferUpdate();
+            const result = await bombGame.cashout(interaction);
+            
+            if (result.success) {
+                await interaction.editReply({ embeds: [result.embed], components: [] });
+                client.bombGames.delete(interaction.user.id);
+            } else {
+                await interaction.followUp({ content: result.message, ephemeral: true });
+            }
+            return;
+        }
+        
+        // Handle cell clicks (bomb_0 sampai bomb_24)
+        if (customId.startsWith('bomb_')) {
+            const cellIndex = parseInt(customId.split('_')[1]);
+            
+            if (isNaN(cellIndex)) {
+                return interaction.reply({ content: '❌ Invalid cell!', ephemeral: true });
+            }
+            
+            await interaction.deferUpdate();
+            const result = await bombGame.revealCell(cellIndex, interaction);
+            
+            if (result.gameOver) {
+                await interaction.editReply({ embeds: [result.embed], components: [] });
+                client.bombGames.delete(interaction.user.id);
+            } else {
+                const newButtons = bombGame.createGridButtons();
+                await interaction.editReply({ embeds: [result.embed], components: newButtons });
+            }
+            return;
+        }
+        
+        // Unknown button
+        return interaction.reply({ content: '❌ Tombol tidak dikenal!', ephemeral: true });
+        
+    } catch (error) {
+        console.error('Error in handleBombInteraction:', error);
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: '❌ Terjadi kesalahan dalam game!', ephemeral: true });
+            } else {
+                await interaction.editReply({ content: '❌ Terjadi kesalahan dalam game!' });
+            }
+        } catch (e) {
+            console.error('Failed to send error response:', e);
+        }
+        client.bombGames?.delete(interaction.user.id);
+    }
+}
+
+// Update module.exports di akhir file
+
+module.exports = { 
+    BombGame, 
+    executeBomb, 
+    handleBombInteraction 
+};

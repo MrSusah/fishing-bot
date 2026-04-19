@@ -14,7 +14,7 @@ const mongoose = require("mongoose");
 const { User } = require("./models/User");
 const { 
   handleGameButton, 
-  handleBombInteraction,
+  handleBombGameInteraction,  // Ganti dengan ini
   createGameMenu,
   createCasinoMenu 
 } = require("./handlers/gameHandler");
@@ -1307,9 +1307,9 @@ client.on("interactionCreate", async (i) => {
     }
     
     // Bomb cell interactions
-    if (i.customId.startsWith("bomb_")) {
-      return handleBombInteraction(i, client);
-    }
+if (i.customId.startsWith("bomb_")) {
+  return handleBombGameInteraction(i, client);
+}
     
     // ===== FISHING BUTTON =====
     if (i.customId === "menu_fish") {
