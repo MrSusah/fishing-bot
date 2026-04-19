@@ -8,7 +8,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle("🎰 **CASINO MENU** 🎰")
       .setDescription("**Pilih permainan kasino:**\n\n" +
-        "🪙 **Coin Flip** - Tebak kepala/ekor (30% win chance)\n" +
+        "🪙 **Coin Flip** - Tebak kepala/ekor\n" +
         "✊ **RPS** - Rock Paper Scissors vs Bot\n" +
         "🎰 **Slots** - Slot machine dengan berbagai hadiah\n" +
         "🎡 **Roulette** - Taruhan pada angka/warna\n" +
