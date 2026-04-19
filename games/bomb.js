@@ -55,11 +55,13 @@ class BombGame {
     return Math.floor(this.betAmount * this.multiplier);
   }
   
+  // PERBAIKAN: Gabungkan grid ke dalam 3 ActionRow (maksimal 5 tombol per row)
   getGridComponents() {
     const components = [];
+    let currentRow = new ActionRowBuilder();
+    let buttonCount = 0;
     
     for (let i = 0; i < GRID_SIZE; i++) {
-      const row = new ActionRowBuilder();
       for (let j = 0; j < GRID_SIZE; j++) {
         const index = i * GRID_SIZE + j;
         const isRevealed = this.revealedCells.has(index);
@@ -88,15 +90,28 @@ class BombGame {
           disabled = true;
         }
         
-        row.addComponents(
+        currentRow.addComponents(
           new ButtonBuilder()
             .setCustomId(`bomb_cell_${index}`)
             .setEmoji(emoji)
             .setStyle(style)
             .setDisabled(disabled)
         );
+        
+        buttonCount++;
+        
+        // Setiap 5 tombol, buat row baru
+        if (buttonCount === 5) {
+          components.push(currentRow);
+          currentRow = new ActionRowBuilder();
+          buttonCount = 0;
+        }
       }
-      components.push(row);
+    }
+    
+    // Push row terakhir jika ada tombol tersisa
+    if (buttonCount > 0) {
+      components.push(currentRow);
     }
     
     return components;
@@ -165,7 +180,6 @@ async function executeBomb(messageOrInteraction, amount) {
   try {
     console.log(`[BOMB] Starting game for user with amount ${amount}`);
     
-    // Tentukan apakah ini dari message atau interaction
     const isMessage = messageOrInteraction.author !== undefined;
     const user = isMessage ? messageOrInteraction.author : messageOrInteraction.user;
     
@@ -189,20 +203,16 @@ async function executeBomb(messageOrInteraction, amount) {
       }
     }
     
-    // Kurangi kredit
     await removeCredits(user.id, amount, "bomb");
     console.log(`[BOMB] Removed ${amount} credits from ${user.id}`);
     
-    // Buat game baru
     const game = new BombGame(user.id, amount);
     activeGames.set(user.id, game);
     console.log(`[BOMB] Game created for ${user.id}`);
     
-    // Kirim embed dan button
     const components = game.getAllComponents();
     
     if (isMessage) {
-      // Ini dari command message
       const sentMessage = await messageOrInteraction.reply({
         embeds: [game.getEmbed()],
         components: components
@@ -210,7 +220,6 @@ async function executeBomb(messageOrInteraction, amount) {
       game.messageId = sentMessage.id;
       game.channelId = messageOrInteraction.channel.id;
     } else {
-      // Ini dari interaction (button)
       if (!messageOrInteraction.deferred && !messageOrInteraction.replied) {
         await messageOrInteraction.deferReply();
       }
@@ -226,10 +235,9 @@ async function executeBomb(messageOrInteraction, amount) {
     
   } catch (error) {
     console.error("[BOMB] Error in executeBomb:", error);
-    console.error("[BOMB] Error stack:", error.stack);
     
     if (messageOrInteraction.author) {
-      return messageOrInteraction.reply("❌ Terjadi kesalahan saat memulai game Bomb! " + error.message);
+      return messageOrInteraction.reply("❌ Terjadi kesalahan saat memulai game Bomb!");
     } else {
       if (!messageOrInteraction.replied) {
         return messageOrInteraction.reply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!", ephemeral: true });
@@ -260,7 +268,6 @@ async function handleBombInteraction(interaction) {
       });
     }
     
-    // Handle cashout
     if (interaction.customId === "bomb_cashout") {
       console.log(`[BOMB] Cashout from ${interaction.user.id}`);
       const winAmount = game.cashout();
@@ -279,7 +286,6 @@ async function handleBombInteraction(interaction) {
       });
     }
     
-    // Handle cell click
     if (interaction.customId.startsWith("bomb_cell_")) {
       const cellIndex = parseInt(interaction.customId.split("_")[2]);
       console.log(`[BOMB] Cell ${cellIndex} clicked by ${interaction.user.id}`);
@@ -307,12 +313,10 @@ async function handleBombInteraction(interaction) {
     
   } catch (error) {
     console.error("[BOMB] Error in handleBombInteraction:", error);
-    console.error("[BOMB] Error stack:", error.stack);
     return interaction.reply({ content: "❌ Terjadi kesalahan dalam game Bomb!", ephemeral: true });
   }
 }
 
-// Cleanup inactive games every 10 minutes
 setInterval(() => {
   for (const [userId, game] of activeGames.entries()) {
     if (!game.isActive) {
