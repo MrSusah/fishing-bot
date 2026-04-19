@@ -375,14 +375,6 @@ function getZoneName(channelId) {
 
 // ================= BOSS =================
 function spawnBoss() {
-  // Hapus boss lama jika ada
-  if (activeBoss) {
-    client.channels.fetch(activeBoss.channel).then(ch => {
-      ch.send(`💨 Boss **${activeBoss.name}** telah menghilang karena waktu habis!`);
-    }).catch(() => {});
-    activeBoss = null;
-  }
-  
   const channel = FISHING_CHANNELS[Math.floor(Math.random() * FISHING_CHANNELS.length)];
   const randomBoss = bossList[Math.floor(Math.random() * bossList.length)];
   
@@ -398,20 +390,9 @@ function spawnBoss() {
   bossSpawnTime = Date.now();
   
   client.channels.fetch(channel).then(ch => {
-    ch.send(`🎣 **BOSS SPOTTED!** 🎣\n${activeBoss.emoji} **${activeBoss.name}** (${activeBoss.rarity}) muncul di channel ini!\n💰 Hadiah: **${activeBoss.value.toLocaleString()} credits**\n✨ Peluang menangkap: **1%** (Sangat Langka!)\n⏰ Boss akan menghilang dalam **3 jam**!`);
+    ch.send(`🎣 **BOSS SPOTTED!** 🎣\n${activeBoss.emoji} **${activeBoss.name}** (${activeBoss.rarity}) muncul di channel ini!\n💰 Hadiah: **${activeBoss.value.toLocaleString()} credits**\n✨ Peluang menangkap: **1%** (Sangat Langka!)`);
   });
-  
-  // Despawn setelah 3 jam
-  setTimeout(() => {
-    if (activeBoss && activeBoss.name === randomBoss.name) {
-      client.channels.fetch(channel).then(ch => {
-        ch.send(`💨 **BOSS DESPAWN!** ${activeBoss.emoji} **${activeBoss.name}** telah menghilang karena tidak ada yang menangkap!`);
-      }).catch(() => {});
-      activeBoss = null;
-    }
-  }, 3 * 60 * 60 * 1000);
 }
-
 setInterval(spawnBoss, 3 * 60 * 60 * 1000);
 
 // ================= LEADERBOARD =================
