@@ -934,64 +934,8 @@ if (msg.content.startsWith("!bomb")) {
     return msg.reply(`❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`);
   }
   
-  // Buat interaction tiruan untuk bomb
-  let lastSentMessage = null;
-  
-  const fakeInteraction = {
-    user: msg.author,
-    username: msg.author.username,
-    id: msg.author.id,
-    userId: msg.author.id,
-    channelId: msg.channel.id,
-    guildId: msg.guild?.id,
-    channel: msg.channel,
-    deferred: false,
-    replied: false,
-    deferReply: async () => {
-      fakeInteraction.deferred = true;
-    },
-    editReply: async (content) => {
-      if (lastSentMessage) {
-        if (typeof content === 'object') {
-          if (content.embeds) {
-            return await lastSentMessage.edit({ embeds: content.embeds, components: content.components });
-          }
-          return await lastSentMessage.edit(content);
-        }
-        return await lastSentMessage.edit(content);
-      }
-      return fakeInteraction.reply(content);
-    },
-    reply: async (content) => {
-      if (typeof content === 'object') {
-        if (content.embeds) {
-          lastSentMessage = await msg.reply({ embeds: content.embeds, components: content.components });
-          return lastSentMessage;
-        }
-        lastSentMessage = await msg.reply(content);
-        return lastSentMessage;
-      }
-      lastSentMessage = await msg.reply(content);
-      return lastSentMessage;
-    },
-    update: async (content) => {
-      if (lastSentMessage) {
-        if (typeof content === 'object') {
-          if (content.embeds) {
-            return await lastSentMessage.edit({ embeds: content.embeds, components: content.components });
-          }
-          return await lastSentMessage.edit(content);
-        }
-        return await lastSentMessage.edit(content);
-      }
-      return fakeInteraction.reply(content);
-    },
-    fetchReply: async () => {
-      return lastSentMessage;
-    }
-  };
-  
-  return executeBomb(fakeInteraction, amount);
+  // Panggil executeBomb dengan message object
+  return executeBomb(msg, amount);
 }
 
   // Cooldown commands

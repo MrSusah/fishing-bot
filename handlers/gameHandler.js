@@ -50,7 +50,7 @@ async function handleCasinoMenu(interaction) {
   const embed = new EmbedBuilder()
     .setTitle("🎰 **CASINO MENU** 🎰")
     .setDescription("**Pilih permainan kasino:**\n\n" +
-      "🪙 **Coin Flip** - Tebak kepala/ekor (30% win chance)\n" +
+      "🪙 **Coin Flip** - Tebak kepala/ekor\n" +
       "✊ **RPS** - Rock Paper Scissors vs Bot\n" +
       "🎰 **Slots** - Slot machine dengan berbagai hadiah\n" +
       "🎡 **Roulette** - Taruhan pada angka/warna\n" +
@@ -116,7 +116,7 @@ async function handleGameButton(interaction, client) {
       });
     }
     return interaction.reply({
-      content: "🪙 **Coin Flip**\nGunakan command: `!cf <kepala/ekor> <jumlah>`\n\nContoh: `!cf kepala 1000`\n\n💡 Win chance: 30% | Menang x2"
+      content: "🪙 **Coin Flip**\nGunakan command: `!cf <kepala/ekor> <jumlah>`\n\nContoh: `!cf kepala 1000`\n\n| Menang x2"
     });
   }
   

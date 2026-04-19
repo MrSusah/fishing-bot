@@ -69,7 +69,6 @@ class BombGame {
         let style = ButtonStyle.Secondary;
         let disabled = false;
         
-        // Jika game sudah selesai (bom meledak atau cashout)
         if (!this.isActive) {
           if (isBomb) {
             emoji = "💣";
@@ -83,7 +82,6 @@ class BombGame {
           }
           disabled = true;
         } 
-        // Jika sel sudah terbuka
         else if (isRevealed) {
           emoji = "💎";
           style = ButtonStyle.Success;
@@ -163,52 +161,79 @@ class BombGame {
 
 const activeGames = new Map();
 
-async function executeBomb(interaction, amount) {
+async function executeBomb(messageOrInteraction, amount) {
   try {
-    console.log(`[BOMB] Starting game for ${interaction.user?.username || interaction.user?.id} with amount ${amount}`);
+    console.log(`[BOMB] Starting game for user with amount ${amount}`);
     
-    // Defer reply jika belum
-    if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply();
-    }
+    // Tentukan apakah ini dari message atau interaction
+    const isMessage = messageOrInteraction.author !== undefined;
+    const user = isMessage ? messageOrInteraction.author : messageOrInteraction.user;
     
-    const balance = await getBalance(interaction.user.id);
+    console.log(`[BOMB] User: ${user.username}, IsMessage: ${isMessage}`);
+    
+    const balance = await getBalance(user.id);
     
     if (amount < 10) {
-      return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
+      if (isMessage) {
+        return messageOrInteraction.reply("❌ Minimal taruhan adalah **10 credits**!");
+      } else {
+        return messageOrInteraction.reply({ content: "❌ Minimal taruhan adalah **10 credits**!", ephemeral: true });
+      }
     }
     
     if (balance < amount) {
-      return interaction.editReply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits` });
+      if (isMessage) {
+        return messageOrInteraction.reply(`❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits`);
+      } else {
+        return messageOrInteraction.reply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits`, ephemeral: true });
+      }
     }
     
     // Kurangi kredit
-    await removeCredits(interaction.user.id, amount, "bomb");
-    console.log(`[BOMB] Removed ${amount} credits from ${interaction.user.id}`);
+    await removeCredits(user.id, amount, "bomb");
+    console.log(`[BOMB] Removed ${amount} credits from ${user.id}`);
     
     // Buat game baru
-    const game = new BombGame(interaction.user.id, amount);
-    activeGames.set(interaction.user.id, game);
-    console.log(`[BOMB] Game created for ${interaction.user.id}`);
+    const game = new BombGame(user.id, amount);
+    activeGames.set(user.id, game);
+    console.log(`[BOMB] Game created for ${user.id}`);
     
     // Kirim embed dan button
     const components = game.getAllComponents();
     
-    const reply = await interaction.editReply({
-      embeds: [game.getEmbed()],
-      components: components
-    });
+    if (isMessage) {
+      // Ini dari command message
+      const sentMessage = await messageOrInteraction.reply({
+        embeds: [game.getEmbed()],
+        components: components
+      });
+      game.messageId = sentMessage.id;
+      game.channelId = messageOrInteraction.channel.id;
+    } else {
+      // Ini dari interaction (button)
+      if (!messageOrInteraction.deferred && !messageOrInteraction.replied) {
+        await messageOrInteraction.deferReply();
+      }
+      const reply = await messageOrInteraction.editReply({
+        embeds: [game.getEmbed()],
+        components: components
+      });
+      game.messageId = reply.id;
+      game.channelId = messageOrInteraction.channelId;
+    }
     
-    // Simpan message ID untuk update nanti
-    game.messageId = reply.id;
-    game.channelId = interaction.channelId;
-    
-    return reply;
+    return true;
     
   } catch (error) {
     console.error("[BOMB] Error in executeBomb:", error);
-    if (!interaction.replied) {
-      return interaction.editReply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!" });
+    console.error("[BOMB] Error stack:", error.stack);
+    
+    if (messageOrInteraction.author) {
+      return messageOrInteraction.reply("❌ Terjadi kesalahan saat memulai game Bomb! " + error.message);
+    } else {
+      if (!messageOrInteraction.replied) {
+        return messageOrInteraction.reply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!", ephemeral: true });
+      }
     }
   }
 }
@@ -282,13 +307,13 @@ async function handleBombInteraction(interaction) {
     
   } catch (error) {
     console.error("[BOMB] Error in handleBombInteraction:", error);
+    console.error("[BOMB] Error stack:", error.stack);
     return interaction.reply({ content: "❌ Terjadi kesalahan dalam game Bomb!", ephemeral: true });
   }
 }
 
 // Cleanup inactive games every 10 minutes
 setInterval(() => {
-  const now = Date.now();
   for (const [userId, game] of activeGames.entries()) {
     if (!game.isActive) {
       activeGames.delete(userId);
