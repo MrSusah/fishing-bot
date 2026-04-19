@@ -1426,65 +1426,7 @@ client.once("ready", async () => {
   
   spawnBoss();
 });
-// Tambahkan di bagian bawah index.js, sebelum client.login
-client.on('profileRequest', async (interaction) => {
-  // Copy kode profile dari interaction handler menu_profile
-  await interaction.deferReply({ flags: 64 });
-  
-  const freshUser = await getUser(interaction.user.id);
-  let totalFish = freshUser.totalFishCaught || 0;
-  const totalJenis = freshUser.fishInventory?.size || 0;
-  
-  const rodLuck = rods[freshUser.equippedRod]?.luck || 1;
-  const baitLuck = baits[freshUser.equippedBait]?.luck || 1;
-  const channelLuck = channelBoost[interaction.channel?.id] || 1;
-  const potionLuck = freshUser.activePotion ? freshUser.activePotion.luck : 1;
-  const totalLuck = rodLuck * baitLuck * globalLuckBoost * channelLuck * potionLuck;
-  
-  const formattedRod = rodLuck.toFixed(2);
-  const formattedBait = baitLuck.toFixed(2);
-  const formattedGlobal = globalLuckBoost.toFixed(2);
-  const formattedChannel = channelLuck.toFixed(2);
-  const formattedPotion = potionLuck.toFixed(2);
-  const formattedTotal = totalLuck.toFixed(2);
-  
-  const luckPercentage = Math.min(100, (totalLuck / 10) * 100);
-  const barLength = Math.floor(luckPercentage / 10);
-  const luckBar = "█".repeat(barLength) + "░".repeat(10 - barLength);
-  
-  let potionStatus = "Tidak aktif";
-  if (freshUser.activePotion) {
-    potionStatus = `${freshUser.activePotion.name}\n⏰ ${freshUser.activePotion.remain} menit`;
-  }
-  if (freshUser.activeCooldownPotion) {
-    potionStatus += `\n⏰ Cooldown: ${freshUser.activeCooldownPotion.name} (${freshUser.activeCooldownPotion.remain} menit)`;
-  }
-  
-  const profileEmbed = {
-    embeds: [{
-      title: `🎣 ${interaction.user.username}'s Fishing Profile`,
-      color: 0x00ae86,
-      thumbnail: { url: interaction.user.displayAvatarURL() },
-      fields: [
-        { name: "💰 **Credits**", value: `${freshUser.credits.toLocaleString()} credits`, inline: true },
-        { name: "⭐ **Points**", value: `${freshUser.points.toLocaleString()} points`, inline: true },
-        { name: "📈 **Activity Points**", value: `${freshUser.activityPoints.toLocaleString()} pts`, inline: true },
-        { name: "🏆 **Total Fishing Credits**", value: `${freshUser.totalFishingCredits.toLocaleString()} credits`, inline: true },
-        { name: "🐟 **Total Ikan**", value: `${totalFish} ekor`, inline: true },
-        { name: "📋 **Jenis Ikan**", value: `${totalJenis} jenis`, inline: true },
-        { name: "🎣 **Rod**", value: `${freshUser.equippedRod}\n\`${formattedRod}x luck\``, inline: true },
-        { name: "🪱 **Bait**", value: `${freshUser.equippedBait}\n\`${formattedBait}x luck\``, inline: true },
-        { name: "🧪 **Potion**", value: potionStatus, inline: true },
-        { name: "✨ **Total Luck**", value: `\`${formattedTotal}x\`\n${luckBar}`, inline: false },
-        { name: "📊 **Luck Breakdown**", value: `┌ 🎣 Rod: **${formattedRod}x**\n├ 🪱 Bait: **${formattedBait}x**\n├ 🧪 Potion: **${formattedPotion}x**\n├ 🌍 Global: **${formattedGlobal}x**\n└ 📡 Channel: **${formattedChannel}x**`, inline: false }
-      ],
-      footer: { text: "Semakin tinggi luck, semakin langka ikan yang didapat!" },
-      timestamp: new Date()
-    }]
-  };
-  
-  return interaction.editReply(profileEmbed);
-});
+
 // ================= LOGIN =================
 client.login(process.env.TOKEN);
 mongoose.connect(process.env.MONGO_URI);
