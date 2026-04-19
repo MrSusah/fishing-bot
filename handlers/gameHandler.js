@@ -3,7 +3,6 @@ const { isGameAllowedInChannel } = require("../utils/channelValidator");
 const { executeHunt } = require("../games/hunt");
 const { executeDungeon } = require("../games/dungeon");
 const { executeFishing } = require("../games/fishing");
-// const { executeBomb, handleBombInteraction } = require("../games/bomb"); // ← HAPUS ATAU COMMENT BARIS INI
 
 const buttonCooldowns = new Map();
 
@@ -67,7 +66,6 @@ async function handleCasinoMenu(interaction) {
   );
   
   const row2 = new ActionRowBuilder().addComponents(
-    // HAPUS TOMBOL BOMB
     new ButtonBuilder().setCustomId("casino_dadu").setLabel("🎲 Dadu").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId("casino_fishing").setLabel("🎣 Fishing").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("back_to_game_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
@@ -163,8 +161,6 @@ async function handleGameButton(interaction, client) {
     });
   }
   
-  // HAPUS BAGIAN CASINO_BOMB
-  
   // Handle back buttons
   if (customId === "back_to_game_menu") {
     return handleGameMenu(interaction);
@@ -174,19 +170,65 @@ async function handleGameButton(interaction, client) {
     return handleCasinoMenu(interaction);
   }
   
-  // HAPUS BAGIAN BOMB INTERACTIONS
-  
   // Jika tidak ada yang cocok
   console.log(`[WARNING] Unknown button: ${customId}`);
   return interaction.reply({ content: "❌ Game tidak ditemukan!" });
 }
 
-// HAPUS FUNGSI createGameMenu dan createCasinoMenu jika tidak digunakan
-// Atau tambahkan jika diperlukan
+function createGameMenu() {
+  const embed = new EmbedBuilder()
+    .setTitle("🎮 **GAME MENU** 🎮")
+    .setDescription("Pilih game yang ingin dimainkan!")
+    .setColor(0x5865f2)
+    .setTimestamp();
+  
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("game_fishing").setLabel("🎣 Fishing").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("game_hunt").setLabel("🏹 Hunt").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("game_dungeon").setLabel("🏰 Dungeon").setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId("game_casino").setLabel("🎰 Casino").setStyle(ButtonStyle.Secondary)
+  );
+  
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Menu Utama").setStyle(ButtonStyle.Secondary)
+  );
+  
+  return { embed, components: [row1, row2] };
+}
+
+function createCasinoMenu() {
+  const embed = new EmbedBuilder()
+    .setTitle("🎰 **CASINO MENU** 🎰")
+    .setDescription("**Pilih permainan kasino:**\n\n" +
+      "🪙 **Coin Flip** - Tebak kepala/ekor (30% win chance)\n" +
+      "✊ **RPS** - Rock Paper Scissors vs Bot\n" +
+      "🎰 **Slots** - Slot machine dengan berbagai hadiah\n" +
+      "🎡 **Roulette** - Taruhan pada angka/warna\n" +
+      "🎲 **Dadu** - Tebak High/Low (1-6)\n\n" +
+      "🎣 **Fishing** - Mancing ikan di channel khusus")
+    .setColor(0xffaa00)
+    .setTimestamp();
+  
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("casino_cf").setLabel("🪙 CF").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("casino_rps").setLabel("✊ RPS").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("casino_slots").setLabel("🎰 Slots").setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId("casino_roulette").setLabel("🎡 Roulette").setStyle(ButtonStyle.Secondary)
+  );
+  
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("casino_dadu").setLabel("🎲 Dadu").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("casino_fishing").setLabel("🎣 Fishing").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("back_to_game_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
+  );
+  
+  return { embed, components: [row1, row2] };
+}
 
 module.exports = {
   handleGameMenu,
   handleCasinoMenu,
   handleGameButton,
-  // handleBombInteraction // HAPUS BARIS INI
+  createGameMenu,
+  createCasinoMenu
 };
