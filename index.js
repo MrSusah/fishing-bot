@@ -23,7 +23,6 @@ const { executeRPS } = require("./games/rps");
 const { executeSlots } = require("./games/slots");
 const { executeRoulette } = require("./games/roulette");
 const { executeDadu } = require("./games/dadu");
-const { executeBomb } = require("./games/bomb");
 const HuntGame = require("./games/hunt");
 const DungeonGame = require("./games/dungeon");
 const FishingGame = require("./games/fishing");
@@ -42,8 +41,6 @@ const client = new Client({
   ]
 });
 
-// Store active bomb games
-client.bombGames = new Map();
 
 // ================= CONFIG =================
 const FISHING_CHANNELS = [
@@ -378,6 +375,14 @@ function getZoneName(channelId) {
 
 // ================= BOSS =================
 function spawnBoss() {
+  // Hapus boss lama jika ada
+  if (activeBoss) {
+    client.channels.fetch(activeBoss.channel).then(ch => {
+      ch.send(`💨 Boss **${activeBoss.name}** telah menghilang karena waktu habis!`);
+    }).catch(() => {});
+    activeBoss = null;
+  }
+  
   const channel = FISHING_CHANNELS[Math.floor(Math.random() * FISHING_CHANNELS.length)];
   const randomBoss = bossList[Math.floor(Math.random() * bossList.length)];
   
@@ -393,9 +398,20 @@ function spawnBoss() {
   bossSpawnTime = Date.now();
   
   client.channels.fetch(channel).then(ch => {
-    ch.send(`🎣 **BOSS SPOTTED!** 🎣\n${activeBoss.emoji} **${activeBoss.name}** (${activeBoss.rarity}) muncul di channel ini!\n💰 Hadiah: **${activeBoss.value.toLocaleString()} credits**\n✨ Peluang menangkap: **1%** (Sangat Langka!)`);
+    ch.send(`🎣 **BOSS SPOTTED!** 🎣\n${activeBoss.emoji} **${activeBoss.name}** (${activeBoss.rarity}) muncul di channel ini!\n💰 Hadiah: **${activeBoss.value.toLocaleString()} credits**\n✨ Peluang menangkap: **1%** (Sangat Langka!)\n⏰ Boss akan menghilang dalam **3 jam**!`);
   });
+  
+  // Despawn setelah 3 jam
+  setTimeout(() => {
+    if (activeBoss && activeBoss.name === randomBoss.name) {
+      client.channels.fetch(channel).then(ch => {
+        ch.send(`💨 **BOSS DESPAWN!** ${activeBoss.emoji} **${activeBoss.name}** telah menghilang karena tidak ada yang menangkap!`);
+      }).catch(() => {});
+      activeBoss = null;
+    }
+  }, 3 * 60 * 60 * 1000);
 }
+
 setInterval(spawnBoss, 3 * 60 * 60 * 1000);
 
 // ================= LEADERBOARD =================
@@ -1031,34 +1047,6 @@ client.on("messageCreate", async (msg) => {
     return executeDadu(fakeInteraction, choice, amount);
   }
 
-  // ================= BOMB COMMAND =================
-  if (msg.content.startsWith("!bomb")) {
-    const args = msg.content.split(" ");
-    if (args.length < 2) {
-      return msg.reply("❌ Usage: `!bomb <jumlah>`\nContoh: `!bomb 1000`\n\n💣 Grid 5x5 dengan 8 bom tersembunyi\n💰 Maks taruhan: 1000 credits");
-    }
-    
-    const amount = parseInt(args[1]);
-    
-    if (isNaN(amount)) {
-      return msg.reply("❌ Jumlah harus berupa angka!");
-    }
-    
-    if (amount < 10) {
-      return msg.reply("❌ Minimal taruhan adalah **10 credits**!");
-    }
-    
-    if (amount > 1000) {
-      return msg.reply("❌ Maksimal taruhan untuk game bomb adalah **1000 credits**!");
-    }
-    
-    if (!isGameAllowedInChannel(msg.channel.id, "bomb")) {
-      return msg.reply(`❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`);
-    }
-    
-    return executeBomb(msg, amount);
-  }
-
   // ================= COOLDOWN COMMANDS =================
   if (msg.content === "!hourly") {
     const cooldown = await checkCooldown(msg.author.id, "hourly");
@@ -1305,11 +1293,6 @@ client.on("interactionCreate", async (i) => {
         components: components
       });
     }
-    
-    // Bomb cell interactions
-if (i.customId.startsWith("bomb_")) {
-  return handleBombGameInteraction(i, client);
-}
     
     // ===== FISHING BUTTON =====
     if (i.customId === "menu_fish") {

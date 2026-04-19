@@ -156,7 +156,6 @@ async function handleGameButton(interaction, client) {
         .addFields(
           { name: "📋 Contoh", value: "`!cf kepala 1000`", inline: true },
           { name: "💰 Pembayaran", value: "Menang x2", inline: true },
-          { name: "📊 Chance", value: "30%", inline: true },
           { name: "💰 Maks Taruhan", value: "10.000 credits", inline: true }
         )
         .setColor(0xffaa00);
@@ -241,29 +240,6 @@ async function handleGameButton(interaction, client) {
       return interaction.editReply({ embeds: [embed] });
     }
     
-    // Handle CASINO BOMB
-    if (customId === "casino_bomb") {
-      if (!isGameAllowedInChannel(channelId, "bomb")) {
-        return interaction.editReply({ 
-          content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#${CASINO_CHANNEL_ID}>`
-        });
-      }
-      const embed = new EmbedBuilder()
-        .setTitle("💣 **Bomb Squad - Minesweeper Style**")
-        .setDescription("Gunakan command: `!bomb <jumlah>`\n\n📋 **Contoh:** `!bomb 1000`")
-        .addFields(
-          { name: "⚡ **Aturan Main**", value: 
-            "• Grid **5x5** dengan **8 bom** tersembunyi\n" +
-            "• Klik kotak untuk membuka (⬛)\n" +
-            "• 💎 Kotak aman = multiplier +10%\n" +
-            "• 💣 Kena bom = kalah semua\n" +
-            "• 💰 Cashout kapan saja untuk ambil kemenangan\n" +
-            "• 💰 Maks taruhan: 1000 credits", inline: false }
-        )
-        .setColor(0xffaa00);
-      return interaction.editReply({ embeds: [embed] });
-    }
-    
     // Handle BACK TO GAME MENU
     if (customId === "back_to_game_menu") {
       const { embed, components } = createGameMenu();
@@ -291,86 +267,6 @@ async function handleGameButton(interaction, client) {
   } catch (error) {
     console.error(`[ERROR] Error in handleGameButton for ${customId}:`, error);
     return interaction.editReply({ content: "❌ Terjadi kesalahan saat memproses game! Silakan coba lagi." });
-  }
-}
-
-async function handleBombGameInteraction(interaction, client) {
-  try {
-    const customId = interaction.customId;
-    
-    // Pastikan bombGames ada di client
-    if (!client.bombGames) {
-      client.bombGames = new Map();
-    }
-    
-    // Handle bomb cell clicks
-    if (customId.startsWith("bomb_")) {
-      const bombGame = client.bombGames.get(interaction.user.id);
-      
-      if (!bombGame) {
-        return interaction.reply({ 
-          content: "❌ Game tidak ditemukan! Mulai game baru dengan `!bomb <jumlah>`", 
-          ephemeral: true 
-        });
-      }
-      
-      const parts = customId.split('_');
-      const action = parts[0];
-      const param = parts[1];
-      
-      if (action === 'bomb') {
-        // Handle cashout
-        if (param === 'cashout') {
-          await interaction.deferUpdate();
-          const result = await bombGame.cashout(interaction);
-          
-          if (result.success) {
-            await interaction.editReply({ embeds: [result.embed], components: [] });
-            client.bombGames.delete(interaction.user.id);
-          } else {
-            await interaction.followUp({ content: result.message, ephemeral: true });
-          }
-          return;
-        }
-        
-        // Handle cell click (bomb_0 sampai bomb_24)
-        const cellIndex = parseInt(param);
-        if (isNaN(cellIndex)) {
-          return interaction.reply({ content: '❌ Invalid cell!', ephemeral: true });
-        }
-        
-        await interaction.deferUpdate();
-        const result = await bombGame.revealCell(cellIndex, interaction);
-        
-        if (result.gameOver) {
-          await interaction.editReply({ embeds: [result.embed], components: [] });
-          client.bombGames.delete(interaction.user.id);
-        } else {
-          const newButtons = bombGame.createGridButtons();
-          await interaction.editReply({ embeds: [result.embed], components: newButtons });
-        }
-        return;
-      }
-    }
-    
-    // Jika bukan bomb interaction, ignore
-    return;
-    
-  } catch (error) {
-    console.error('[ERROR] Error in handleBombGameInteraction:', error);
-    try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: '❌ Terjadi kesalahan dalam game bomb!', ephemeral: true });
-      } else {
-        await interaction.editReply({ content: '❌ Terjadi kesalahan dalam game bomb!' });
-      }
-    } catch (e) {
-      console.error('Failed to send error response:', e);
-    }
-    // Hapus game dari memory jika error
-    if (client.bombGames) {
-      client.bombGames.delete(interaction.user.id);
-    }
   }
 }
 
