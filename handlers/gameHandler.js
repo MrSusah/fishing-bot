@@ -156,6 +156,7 @@ async function handleGameButton(interaction, client) {
         .addFields(
           { name: "📋 Contoh", value: "`!cf kepala 1000`", inline: true },
           { name: "💰 Pembayaran", value: "Menang x2", inline: true },
+          { name: "📊 Chance", value: "30%", inline: true },
           { name: "💰 Maks Taruhan", value: "10.000 credits", inline: true }
         )
         .setColor(0xffaa00);
