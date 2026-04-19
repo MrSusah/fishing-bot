@@ -9,7 +9,7 @@ const MONSTERS = [
 ];
 
 async function executeDungeon(interaction) {
-  await interaction.deferReply({ flags: 64 });
+  await interaction.deferReply();
   
   const cooldown = await checkCooldown(interaction.user.id, "dungeon");
   if (!cooldown.available) {

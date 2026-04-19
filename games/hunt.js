@@ -9,7 +9,7 @@ const ANIMALS = [
 ];
 
 async function executeHunt(interaction) {
-  await interaction.deferReply({ flags: 64 });
+  await interaction.deferReply();
   
   const cooldown = await checkCooldown(interaction.user.id, "hunt");
   if (!cooldown.available) {
