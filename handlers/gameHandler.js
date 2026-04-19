@@ -3,6 +3,41 @@ const { isGameAllowedInChannel } = require("../utils/channelValidator");
 const { executeHunt } = require("../games/hunt");
 const { executeDungeon } = require("../games/dungeon");
 const { executeFishing } = require("../games/fishing");
+const { getUser } = require("../utils/economy");
+
+// ================= RODS & BAITS (untuk profile) =================
+const rods = {
+  "Basic Rod": { luck: 1, price: 0, type: "rod", emoji: "🎣" },
+  "Iron Rod": { luck: 1.2, price: 200, type: "rod", emoji: "⚙️" },
+  "Silver Rod": { luck: 1.4, price: 400, type: "rod", emoji: "🥈" },
+  "Golden Rod": { luck: 1.7, price: 800, type: "rod", emoji: "👑" },
+  "Dragon Rod": { luck: 2, price: 1500, type: "rod", emoji: "🐉" },
+  "Mythic Rod": { luck: 2.5, price: 3000, type: "rod", emoji: "🏆" },
+  "God Rod": { luck: 3, price: 5000, type: "rod", emoji: "⚡" },
+  "Legendary Rod": { luck: 3.5, price: 10000, type: "rod", emoji: "🌟" },
+  "Celestial Rod": { luck: 4.0, price: 30000, type: "rod", emoji: "🌙" },
+  "Divine Rod": { luck: 4.5, price: 90000, type: "rod", emoji: "✨" },
+  "Ethereal Rod": { luck: 5.0, price: 270000, type: "rod", emoji: "🔮" },
+  "Abyssal Rod": { luck: 5.5, price: 810000, type: "rod", emoji: "🌊" },
+  "Primordial Rod": { luck: 6.0, price: 2430000, type: "rod", emoji: "🌀" }
+};
+
+const baits = {
+  "Basic Bait": { luck: 1, price: 0, type: "bait", emoji: "🪱" },
+  "Herbal Bait": { luck: 1.2, price: 100, type: "bait", emoji: "🌿" },
+  "Magic Bait": { luck: 1.5, price: 300, type: "bait", emoji: "✨" },
+  "Divine Bait": { luck: 1.8, price: 800, type: "bait", emoji: "💫" },
+  "God Bait": { luck: 2.2, price: 1500, type: "bait", emoji: "⚡" },
+  "Mythic Bait": { luck: 2.5, price: 3000, type: "bait", emoji: "🏆" },
+  "Legendary Bait": { luck: 3.0, price: 9000, type: "bait", emoji: "🌟" },
+  "Celestial Bait": { luck: 3.5, price: 27000, type: "bait", emoji: "🌙" },
+  "Divine Bait+": { luck: 4.0, price: 81000, type: "bait", emoji: "✨" },
+  "Ethereal Bait": { luck: 4.5, price: 243000, type: "bait", emoji: "🔮" },
+  "Primordial Bait": { luck: 5.0, price: 729000, type: "bait", emoji: "🌀" }
+};
+
+let globalLuckBoost = 1;
+let channelBoost = {};
 
 const buttonCooldowns = new Map();
 
@@ -75,9 +110,69 @@ async function handleCasinoMenu(interaction) {
   return interaction.reply({ embeds: [embed], components: [row1, row2] });
 }
 
+async function showProfile(interaction) {
+  await interaction.deferReply({ flags: 64 });
+  
+  const freshUser = await getUser(interaction.user.id);
+  let totalFish = freshUser.totalFishCaught || 0;
+  const totalJenis = freshUser.fishInventory?.size || 0;
+  
+  const rodLuck = rods[freshUser.equippedRod]?.luck || 1;
+  const baitLuck = baits[freshUser.equippedBait]?.luck || 1;
+  const channelLuck = channelBoost[interaction.channel?.id] || 1;
+  const potionLuck = freshUser.activePotion ? freshUser.activePotion.luck : 1;
+  const totalLuck = rodLuck * baitLuck * globalLuckBoost * channelLuck * potionLuck;
+  
+  const formattedRod = rodLuck.toFixed(2);
+  const formattedBait = baitLuck.toFixed(2);
+  const formattedGlobal = globalLuckBoost.toFixed(2);
+  const formattedChannel = channelLuck.toFixed(2);
+  const formattedPotion = potionLuck.toFixed(2);
+  const formattedTotal = totalLuck.toFixed(2);
+  
+  const luckPercentage = Math.min(100, (totalLuck / 10) * 100);
+  const barLength = Math.floor(luckPercentage / 10);
+  const luckBar = "█".repeat(barLength) + "░".repeat(10 - barLength);
+  
+  let potionStatus = "Tidak aktif";
+  if (freshUser.activePotion) {
+    potionStatus = `${freshUser.activePotion.name}\n⏰ ${freshUser.activePotion.remain} menit`;
+  }
+  if (freshUser.activeCooldownPotion) {
+    potionStatus += `\n⏰ Cooldown: ${freshUser.activeCooldownPotion.name} (${freshUser.activeCooldownPotion.remain} menit)`;
+  }
+  
+  const embed = new EmbedBuilder()
+    .setTitle(`🎣 ${interaction.user.username}'s Fishing Profile`)
+    .setColor(0x00ae86)
+    .setThumbnail(interaction.user.displayAvatarURL())
+    .addFields(
+      { name: "💰 **Credits**", value: `${freshUser.credits.toLocaleString()} credits`, inline: true },
+      { name: "⭐ **Points**", value: `${freshUser.points.toLocaleString()} points`, inline: true },
+      { name: "📈 **Activity Points**", value: `${freshUser.activityPoints.toLocaleString()} pts`, inline: true },
+      { name: "🏆 **Total Fishing Credits**", value: `${freshUser.totalFishingCredits.toLocaleString()} credits`, inline: true },
+      { name: "🐟 **Total Ikan**", value: `${totalFish} ekor`, inline: true },
+      { name: "📋 **Jenis Ikan**", value: `${totalJenis} jenis`, inline: true },
+      { name: "🎣 **Rod**", value: `${freshUser.equippedRod}\n\`${formattedRod}x luck\``, inline: true },
+      { name: "🪱 **Bait**", value: `${freshUser.equippedBait}\n\`${formattedBait}x luck\``, inline: true },
+      { name: "🧪 **Potion**", value: potionStatus, inline: true },
+      { name: "✨ **Total Luck**", value: `\`${formattedTotal}x\`\n${luckBar}`, inline: false },
+      { name: "📊 **Luck Breakdown**", value: `┌ 🎣 Rod: **${formattedRod}x**\n├ 🪱 Bait: **${formattedBait}x**\n├ 🧪 Potion: **${formattedPotion}x**\n├ 🌍 Global: **${formattedGlobal}x**\n└ 📡 Channel: **${formattedChannel}x**`, inline: false }
+    )
+    .setFooter({ text: "Semakin tinggi luck, semakin langka ikan yang didapat!" })
+    .setTimestamp();
+  
+  return interaction.editReply({ embeds: [embed] });
+}
+
 async function handleGameButton(interaction, client) {
   const channelId = interaction.channelId;
   const customId = interaction.customId;
+  
+  // Handle profile button
+  if (customId === "game_profile") {
+    return showProfile(interaction);
+  }
   
   // Handle direct game buttons
   if (customId === "game_hunt") {
@@ -139,23 +234,7 @@ async function handleGameButton(interaction, client) {
       content: "🎰 **Slot Machine**\nGunakan command: `!slots <jumlah>`\n\nContoh: `!slots 1000`\n\n💡 Pair x1.5 | Triple x3-10 | Jackpot x15"
     });
   }
-  // Di dalam fungsi handleGameButton, tambahkan:
-if (customId === "game_profile") {
-  // Panggil fungsi profile dari index.js atau buat di sini
-  // Kita akan buat interaction untuk profile
-  const fakeInteraction = {
-    ...interaction,
-    customId: "menu_profile",
-    reply: interaction.reply.bind(interaction),
-    deferReply: interaction.deferReply.bind(interaction),
-    editReply: interaction.editReply.bind(interaction),
-    update: interaction.update?.bind(interaction)
-  };
-  // Kita perlu akses ke fungsi profile dari index.js
-  // Sementara kita kirim event ke index.js
-  return interaction.client.emit('profileRequest', fakeInteraction);
-
-}
+  
   if (customId === "casino_roulette") {
     if (!isGameAllowedInChannel(channelId, "roulette")) {
       return interaction.reply({ 
@@ -195,7 +274,7 @@ if (customId === "game_profile") {
 function createGameMenu() {
   const embed = new EmbedBuilder()
     .setTitle("🎮 **GAME MENU** 🎮")
-    .setDescription("Pilih game yang ingin dimainkan!")
+    .setDescription("Pilih menu di bawah ini!")
     .setColor(0x5865f2)
     .setTimestamp();
   
@@ -207,6 +286,7 @@ function createGameMenu() {
   );
   
   const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("game_profile").setLabel("👤 Profile").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Menu Utama").setStyle(ButtonStyle.Secondary)
   );
   
