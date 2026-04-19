@@ -164,16 +164,17 @@ async function handleGameButton(interaction, client) {
     });
   }
   
-  if (customId === "casino_bomb") {
-    if (!isGameAllowedInChannel(channelId, "bomb")) {
-      return interaction.reply({ 
-        content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
-      });
-    }
-    return interaction.reply({
-      content: "💣 **Bomb Squad**\nGunakan command: `!bomb <jumlah>`\n\nContoh: `!bomb 1000`\n\n💡 Grid 8x8 dengan 10 bom tersembunyi\n💎 Setiap langkah aman multiplier +10%\n💣 Kena bom = kalah semua\n💰 Cashout kapan saja!"
+// Di dalam handleGameButton, untuk case "bomb":
+if (customId === "casino_bomb") {
+  if (!isGameAllowedInChannel(channelId, "bomb")) {
+    return interaction.reply({ 
+      content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
     });
   }
+  return interaction.reply({
+    content: "💣 **Bomb Squad**\nGunakan command: `!bomb <jumlah>`\n\nContoh: `!bomb 1000`\n\n💡 Grid 8x8 dengan 10 bom tersembunyi\n💎 Setiap langkah aman multiplier +10%\n💣 Kena bom = kalah semua\n💰 Cashout kapan saja!"
+  });
+}
   
   if (customId === "back_to_game_menu") {
     return handleGameMenu(interaction);

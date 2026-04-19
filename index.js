@@ -912,50 +912,66 @@ client.on("messageCreate", async (msg) => {
     return executeDadu(fakeInteraction, choice, amount);
   }
 
-  // Command !bomb
-  if (msg.content.startsWith("!bomb")) {
-    const args = msg.content.split(" ");
-    if (args.length < 2) {
-      return msg.reply("❌ Usage: `!bomb <jumlah>`\nContoh: `!bomb 1000`");
-    }
-    
-    const amount = parseInt(args[1]);
-    
-    if (isNaN(amount)) {
-      return msg.reply("❌ Jumlah harus berupa angka!");
-    }
-    
-    if (!isGameAllowedInChannel(msg.channel.id, "bomb")) {
-      return msg.reply(`❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`);
-    }
-    
-    const fakeInteraction = {
-      user: msg.author,
-      userId: msg.author.id,
-      channelId: msg.channel.id,
-      deferReply: async () => {},
-      editReply: async (content, options) => {
-        if (options?.embeds) {
-          return msg.reply({ embeds: options.embeds, components: options.components });
-        }
-        return msg.reply(content);
-      },
-      reply: async (content, options) => {
-        if (options?.embeds) {
-          return msg.reply({ embeds: options.embeds, components: options.components });
-        }
-        return msg.reply(content);
-      },
-      update: async (options) => {
-        if (options?.embeds) {
-          return msg.reply({ embeds: options.embeds, components: options.components });
-        }
-        return msg.reply(options);
-      }
-    };
-    
-    return executeBomb(fakeInteraction, amount);
+// Command !bomb
+if (msg.content.startsWith("!bomb")) {
+  const args = msg.content.split(" ");
+  if (args.length < 2) {
+    return msg.reply("❌ Usage: `!bomb <jumlah>`\nContoh: `!bomb 1000`");
   }
+  
+  const amount = parseInt(args[1]);
+  
+  if (isNaN(amount)) {
+    return msg.reply("❌ Jumlah harus berupa angka!");
+  }
+  
+  if (!isGameAllowedInChannel(msg.channel.id, "bomb")) {
+    return msg.reply(`❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`);
+  }
+  
+  // Buat interaction tiruan untuk bomb
+  const fakeInteraction = {
+    user: msg.author,
+    username: msg.author.username,
+    id: msg.author.id,
+    userId: msg.author.id,
+    channelId: msg.channel.id,
+    guildId: msg.guild?.id,
+    deferred: false,
+    replied: false,
+    deferReply: async () => {
+      fakeInteraction.deferred = true;
+    },
+    editReply: async (content) => {
+      if (typeof content === 'object') {
+        if (content.embeds) {
+          return msg.reply({ embeds: content.embeds, components: content.components });
+        }
+        return msg.reply(content);
+      }
+      return msg.reply(content);
+    },
+    reply: async (content) => {
+      if (typeof content === 'object') {
+        if (content.embeds) {
+          return msg.reply({ embeds: content.embeds, components: content.components });
+        }
+        return msg.reply(content);
+      }
+      return msg.reply(content);
+    },
+    update: async (content) => {
+      // Untuk bomb update, kita perlu edit pesan sebelumnya
+      // Simpan messageId untuk edit nanti
+      if (fakeInteraction.lastMessage) {
+        return fakeInteraction.lastMessage.edit(content);
+      }
+      return msg.reply(content);
+    }
+  };
+  
+  return executeBomb(fakeInteraction, amount);
+}
 
   // Cooldown commands
   if (msg.content === "!hourly") {

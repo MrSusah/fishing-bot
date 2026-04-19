@@ -97,10 +97,11 @@ class BombGame {
   }
   
   getActionButtons() {
-    const row = new ActionRowBuilder();
+    const rows = [];
+    const row1 = new ActionRowBuilder();
     
     if (this.isActive && !this.isCashedOut) {
-      row.addComponents(
+      row1.addComponents(
         new ButtonBuilder()
           .setCustomId("bomb_cashout")
           .setLabel(`💰 Cashout (${this.getCurrentWin().toLocaleString()} credits)`)
@@ -108,14 +109,15 @@ class BombGame {
       );
     }
     
-    row.addComponents(
+    row1.addComponents(
       new ButtonBuilder()
         .setCustomId("back_to_casino")
         .setLabel("🎰 Kembali ke Casino")
         .setStyle(ButtonStyle.Secondary)
     );
     
-    return [row];
+    rows.push(row1);
+    return rows;
   }
   
   getEmbed() {
@@ -136,7 +138,7 @@ class BombGame {
       const winAmount = this.getCurrentWin();
       embed.setDescription(`✅ **CASHOUT BERHASIL!** Kamu mendapatkan **${winAmount.toLocaleString()}** credits! ✅`);
     } else {
-      embed.setDescription("🔍 Klik kotak untuk mencari harta karun! Hindari bom! 💣");
+      embed.setDescription("🔍 Klik kotak untuk mencari harta karun! Hindari bom! 💣\n\n⚡ **Aturan:** Setiap kotak aman = multiplier +10% | Kena bom = kalah semua");
     }
     
     return embed;
@@ -146,73 +148,128 @@ class BombGame {
 const activeGames = new Map();
 
 async function executeBomb(interaction, amount) {
-  await interaction.deferReply();
-  
-  const balance = await getBalance(interaction.user.id);
-  
-  if (amount < 10) {
-    return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!", flags: 64 });
+  try {
+    console.log(`[BOMB] Starting game for ${interaction.user.username} with amount ${amount}`);
+    
+    // Pastikan interaction didefer
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply();
+    }
+    
+    const balance = await getBalance(interaction.user.id);
+    
+    if (amount < 10) {
+      return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
+    }
+    
+    if (balance < amount) {
+      return interaction.editReply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits` });
+    }
+    
+    // Kurangi kredit
+    await removeCredits(interaction.user.id, amount, "bomb");
+    console.log(`[BOMB] Removed ${amount} credits from ${interaction.user.username}`);
+    
+    // Buat game baru
+    const game = new BombGame(interaction.user.id, amount);
+    activeGames.set(interaction.user.id, game);
+    console.log(`[BOMB] Game created for ${interaction.user.id}`);
+    
+    // Kirim embed dan button
+    const components = [...game.getGridButtons(), ...game.getActionButtons()];
+    
+    return interaction.editReply({
+      embeds: [game.getEmbed()],
+      components: components
+    });
+  } catch (error) {
+    console.error("[BOMB] Error in executeBomb:", error);
+    return interaction.editReply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!" });
   }
-  
-  if (balance < amount) {
-    return interaction.editReply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits`, flags: 64 });
-  }
-  
-  await removeCredits(interaction.user.id, amount, "bomb");
-  
-  const game = new BombGame(interaction.user.id, amount);
-  activeGames.set(interaction.user.id, game);
-  
-  const components = [...game.getGridButtons(), ...game.getActionButtons()];
-  
-  return interaction.editReply({
-    embeds: [game.getEmbed()],
-    components: components
-  });
 }
 
 async function handleBombInteraction(interaction) {
-  const game = activeGames.get(interaction.user.id);
-  if (!game || !game.isActive) {
-    return interaction.update({
-      content: "❌ Game tidak aktif atau sudah berakhir!",
-      components: [],
-      embeds: []
-    });
-  }
-  
-  if (interaction.customId === "bomb_cashout") {
-    const winAmount = game.cashout();
-    if (winAmount > 0) {
-      await addCredits(interaction.user.id, winAmount, "bomb");
-    }
-    activeGames.delete(interaction.user.id);
+  try {
+    console.log(`[BOMB] Handling interaction: ${interaction.customId} for user ${interaction.user.id}`);
     
-    const components = [...game.getGridButtons(), ...game.getActionButtons()];
-    return interaction.update({
-      embeds: [game.getEmbed()],
-      components: components
-    });
-  }
-  
-  if (interaction.customId.startsWith("bomb_cell_")) {
-    const cellIndex = parseInt(interaction.customId.split("_")[2]);
-    const result = game.revealCell(cellIndex);
+    const game = activeGames.get(interaction.user.id);
     
-    if (!result.success) {
-      return interaction.deferUpdate();
+    if (!game) {
+      return interaction.reply({ 
+        content: "❌ Tidak ada game Bomb yang aktif! Gunakan `!bomb <jumlah>` untuk memulai.", 
+        ephemeral: true 
+      });
     }
     
-    if (result.isBomb) {
+    if (!game.isActive) {
       activeGames.delete(interaction.user.id);
+      return interaction.update({
+        content: "❌ Game sudah berakhir! Gunakan `!bomb <jumlah>` untuk bermain lagi.",
+        components: [],
+        embeds: []
+      });
     }
     
-    const components = [...game.getGridButtons(), ...game.getActionButtons()];
-    return interaction.update({
-      embeds: [game.getEmbed()],
-      components: components
-    });
+    // Handle cashout
+    if (interaction.customId === "bomb_cashout") {
+      console.log(`[BOMB] Cashout from ${interaction.user.id}`);
+      const winAmount = game.cashout();
+      
+      if (winAmount > 0) {
+        await addCredits(interaction.user.id, winAmount, "bomb");
+        console.log(`[BOMB] Added ${winAmount} credits to ${interaction.user.id}`);
+      }
+      
+      activeGames.delete(interaction.user.id);
+      
+      const components = [...game.getGridButtons(), ...game.getActionButtons()];
+      return interaction.update({
+        embeds: [game.getEmbed()],
+        components: components
+      });
+    }
+    
+    // Handle cell click
+    if (interaction.customId.startsWith("bomb_cell_")) {
+      const cellIndex = parseInt(interaction.customId.split("_")[2]);
+      console.log(`[BOMB] Cell ${cellIndex} clicked by ${interaction.user.id}`);
+      
+      const result = game.revealCell(cellIndex);
+      console.log(`[BOMB] Result: isBomb=${result.isBomb}, gameOver=${result.gameOver}, multiplier=${game.multiplier}`);
+      
+      if (!result.success) {
+        return interaction.deferUpdate();
+      }
+      
+      if (result.isBomb) {
+        console.log(`[BOMB] Game over for ${interaction.user.id} - KENA BOM!`);
+        activeGames.delete(interaction.user.id);
+      }
+      
+      const components = [...game.getGridButtons(), ...game.getActionButtons()];
+      return interaction.update({
+        embeds: [game.getEmbed()],
+        components: components
+      });
+    }
+    
+    return interaction.deferUpdate();
+    
+  } catch (error) {
+    console.error("[BOMB] Error in handleBombInteraction:", error);
+    return interaction.reply({ content: "❌ Terjadi kesalahan dalam game Bomb!", ephemeral: true });
   }
 }
+
+// Fungsi untuk membersihkan game yang tidak aktif (optional)
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, game] of activeGames.entries()) {
+    // Hapus game yang sudah tidak aktif lebih dari 30 menit
+    if (!game.isActive && game.endTime && now - game.endTime > 1800000) {
+      activeGames.delete(userId);
+    }
+  }
+}, 600000);
 
 module.exports = { executeBomb, handleBombInteraction };

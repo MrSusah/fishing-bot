@@ -27,8 +27,7 @@ async function executeCF(interaction, choice, amount) {
     .setColor(isWin ? 0x00ff00 : 0xff0000)
     .addFields(
       { name: "🎲 **Pilihanmu**", value: choice.toUpperCase(), inline: true },
-      { name: "🪙 **Hasil**", value: result.toUpperCase(), inline: true },
-      { name: "📊 **Win Chance**", value: "30%", inline: true }
+      { name: "🪙 **Hasil**", value: result.toUpperCase(), inline: true }
     )
     .setTimestamp();
   
