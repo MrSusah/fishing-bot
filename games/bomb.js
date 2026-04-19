@@ -6,9 +6,9 @@ class BombGame {
         this.userId = userId;
         this.username = username;
         this.amount = amount;
-        this.gridSize = 5; // 5x5 grid
+        this.gridSize = 5;
         this.totalCells = 25;
-        this.bombCount = 8; // 8 bombs in 5x5 grid
+        this.bombCount = 8;
         this.revealed = Array(this.totalCells).fill(false);
         this.bombs = [];
         this.multiplier = 1.0;
@@ -18,7 +18,6 @@ class BombGame {
     }
     
     initGame() {
-        // Place bombs randomly
         const bombIndices = new Set();
         while (bombIndices.size < this.bombCount) {
             bombIndices.add(Math.floor(Math.random() * this.totalCells));
@@ -36,7 +35,6 @@ class BombGame {
         }
         
         if (this.bombs.includes(index)) {
-            // Hit bomb - game over
             this.gameActive = false;
             await economy.removeCredits(this.userId, this.amount);
             
@@ -45,10 +43,9 @@ class BombGame {
             
             return { gameOver: true, embed, lossAmount: this.amount };
         } else {
-            // Safe cell
             this.revealed[index] = true;
             this.revealedCount++;
-            this.multiplier = 1 + (this.revealedCount * 0.1); // +0.1x per tile
+            this.multiplier = 1 + (this.revealedCount * 0.1);
             this.currentWinAmount = Math.floor(this.amount * this.multiplier);
             
             const gridDisplay = this.createGridDisplay(false);
@@ -75,14 +72,9 @@ class BombGame {
         
         this.gameActive = false;
         
-        // Get old balance untuk perhitungan
         const oldBalance = await economy.getBalance(this.userId);
-        
-        // Process transaction
         await economy.removeCredits(this.userId, this.amount);
         await economy.addCredits(this.userId, this.currentWinAmount);
-        
-        // Get new balance
         const newBalance = await economy.getBalance(this.userId);
         
         const gridDisplay = this.createGridDisplay(true);
@@ -99,7 +91,6 @@ class BombGame {
                 const index = i * this.gridSize + j;
                 
                 if (revealAll) {
-                    // Show all bombs and gems
                     if (this.bombs.includes(index)) {
                         row += '💣 ';
                     } else if (this.revealed[index]) {
@@ -108,7 +99,6 @@ class BombGame {
                         row += '⬜ ';
                     }
                 } else {
-                    // Only show revealed tiles
                     if (this.revealed[index]) {
                         row += '💎 ';
                     } else {
@@ -231,7 +221,6 @@ class BombGame {
 // ================= FUNGSI UNTUK MESSAGE COMMAND =================
 async function executeBomb(message, amount) {
     try {
-        // Validasi amount
         if (isNaN(amount) || amount < 10) {
             return message.reply("❌ Minimal taruhan adalah **10 credits**!");
         }
@@ -240,21 +229,17 @@ async function executeBomb(message, amount) {
             return message.reply("❌ Maksimal taruhan untuk game bomb adalah **1000 credits**!");
         }
         
-        // Cek saldo
         const balance = await economy.getBalance(message.author.id);
         if (balance < amount) {
             return message.reply(`❌ Saldo tidak cukup! Kamu memiliki ${balance.toLocaleString()} credits.`);
         }
         
-        // Buat game instance
         const bombGame = new BombGame(message.author.id, message.author.username, amount);
         bombGame.initGame();
         
-        // Simpan ke client
         if (!message.client.bombGames) message.client.bombGames = new Map();
         message.client.bombGames.set(message.author.id, bombGame);
         
-        // Tampilkan grid awal
         const gridDisplay = bombGame.createGridDisplay(false);
         const embed = bombGame.createGameEmbed(gridDisplay);
         const buttons = bombGame.createGridButtons();
@@ -269,7 +254,6 @@ async function executeBomb(message, amount) {
 // ================= FUNGSI UNTUK HANDLE BUTTON INTERACTION =================
 async function handleBombInteraction(interaction, client) {
     try {
-        // Pastikan bombGames ada
         if (!client.bombGames) client.bombGames = new Map();
         
         const bombGame = client.bombGames.get(interaction.user.id);
@@ -283,7 +267,6 @@ async function handleBombInteraction(interaction, client) {
         
         const customId = interaction.customId;
         
-        // Handle cashout
         if (customId === 'bomb_cashout') {
             await interaction.deferUpdate();
             const result = await bombGame.cashout(interaction);
@@ -297,7 +280,6 @@ async function handleBombInteraction(interaction, client) {
             return;
         }
         
-        // Handle cell clicks (bomb_0 sampai bomb_24)
         if (customId.startsWith('bomb_')) {
             const cellIndex = parseInt(customId.split('_')[1]);
             
@@ -318,7 +300,6 @@ async function handleBombInteraction(interaction, client) {
             return;
         }
         
-        // Unknown button
         return interaction.reply({ content: '❌ Tombol tidak dikenal!', ephemeral: true });
         
     } catch (error) {
@@ -335,117 +316,6 @@ async function handleBombInteraction(interaction, client) {
         client.bombGames?.delete(interaction.user.id);
     }
 }
-
-async function executeBomb(message, amount) {
-    try {
-        const economy = require('../utils/economy');
-        
-        // Validasi amount
-        if (isNaN(amount) || amount < 10) {
-            return message.reply("❌ Minimal taruhan adalah **10 credits**!");
-        }
-        
-        if (amount > 1000) {
-            return message.reply("❌ Maksimal taruhan untuk game bomb adalah **1000 credits**!");
-        }
-        
-        // Cek saldo
-        const balance = await economy.getBalance(message.author.id);
-        if (balance < amount) {
-            return message.reply(`❌ Saldo tidak cukup! Kamu memiliki ${balance.toLocaleString()} credits.`);
-        }
-        
-        // Buat game instance
-        const bombGame = new BombGame(message.author.id, message.author.username, amount);
-        bombGame.initGame();
-        
-        // Simpan ke client
-        if (!message.client.bombGames) message.client.bombGames = new Map();
-        message.client.bombGames.set(message.author.id, bombGame);
-        
-        // Tampilkan grid awal
-        const gridDisplay = bombGame.createGridDisplay(false);
-        const embed = bombGame.createGameEmbed(gridDisplay);
-        const buttons = bombGame.createGridButtons();
-        
-        return message.reply({ embeds: [embed], components: buttons });
-    } catch (error) {
-        console.error('Error in executeBomb:', error);
-        return message.reply('❌ Terjadi kesalahan saat memulai game!');
-    }
-}
-
-// ================= FUNGSI UNTUK HANDLE BUTTON INTERACTION =================
-async function handleBombInteraction(interaction, client) {
-    try {
-        // Pastikan bombGames ada
-        if (!client.bombGames) client.bombGames = new Map();
-        
-        const bombGame = client.bombGames.get(interaction.user.id);
-        
-        if (!bombGame) {
-            return interaction.reply({ 
-                content: "❌ Game tidak ditemukan! Mulai game baru dengan `!bomb <jumlah>`", 
-                ephemeral: true 
-            });
-        }
-        
-        const customId = interaction.customId;
-        
-        // Handle cashout
-        if (customId === 'bomb_cashout') {
-            await interaction.deferUpdate();
-            const result = await bombGame.cashout(interaction);
-            
-            if (result.success) {
-                await interaction.editReply({ embeds: [result.embed], components: [] });
-                client.bombGames.delete(interaction.user.id);
-            } else {
-                await interaction.followUp({ content: result.message, ephemeral: true });
-            }
-            return;
-        }
-        
-        // Handle cell clicks (bomb_0 sampai bomb_24)
-        if (customId.startsWith('bomb_')) {
-            const cellIndex = parseInt(customId.split('_')[1]);
-            
-            if (isNaN(cellIndex)) {
-                return interaction.reply({ content: '❌ Invalid cell!', ephemeral: true });
-            }
-            
-            await interaction.deferUpdate();
-            const result = await bombGame.revealCell(cellIndex, interaction);
-            
-            if (result.gameOver) {
-                await interaction.editReply({ embeds: [result.embed], components: [] });
-                client.bombGames.delete(interaction.user.id);
-            } else {
-                const newButtons = bombGame.createGridButtons();
-                await interaction.editReply({ embeds: [result.embed], components: newButtons });
-            }
-            return;
-        }
-        
-        // Unknown button
-        return interaction.reply({ content: '❌ Tombol tidak dikenal!', ephemeral: true });
-        
-    } catch (error) {
-        console.error('Error in handleBombInteraction:', error);
-        try {
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: '❌ Terjadi kesalahan dalam game!', ephemeral: true });
-            } else {
-                await interaction.editReply({ content: '❌ Terjadi kesalahan dalam game!' });
-            }
-        } catch (e) {
-            console.error('Failed to send error response:', e);
-        }
-        client.bombGames?.delete(interaction.user.id);
-    }
-}
-
-// Update module.exports di akhir file
 
 module.exports = { 
     BombGame, 
