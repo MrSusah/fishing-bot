@@ -164,18 +164,28 @@ async function handleGameButton(interaction, client) {
     });
   }
   
-// Di dalam handleGameButton, untuk case "bomb":
-if (customId === "casino_bomb") {
-  if (!isGameAllowedInChannel(channelId, "bomb")) {
-    return interaction.reply({ 
-      content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+  if (customId === "casino_bomb") {
+    if (!isGameAllowedInChannel(channelId, "bomb")) {
+      return interaction.reply({ 
+        content: `❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`
+      });
+    }
+    return interaction.reply({
+      content: "💣 **Bomb Squad - Minesweeper Style** 💣\n\n" +
+        "🎮 **Cara Bermain:**\n" +
+        "Gunakan command: `!bomb <jumlah>`\n\n" +
+        "📋 **Contoh:** `!bomb 1000`\n\n" +
+        "⚡ **Aturan Main:**\n" +
+        "• Grid **5x5** dengan **5 bom** tersembunyi\n" +
+        "• Klik kotak untuk membuka (❓)\n" +
+        "• 💎 Kotak aman = multiplier +20%\n" +
+        "• 💣 Kena bom = kalah semua\n" +
+        "• 💰 Cashout kapan saja untuk ambil kemenangan\n\n" +
+        "🎁 **Multiplier progresif:** Setiap kotak aman menambah kemenangan!"
     });
   }
-  return interaction.reply({
-    content: "💣 **Bomb Squad**\nGunakan command: `!bomb <jumlah>`\n\nContoh: `!bomb 1000`\n\n💡 Grid 8x8 dengan 10 bom tersembunyi\n💎 Setiap langkah aman multiplier +10%\n💣 Kena bom = kalah semua\n💰 Cashout kapan saja!"
-  });
-}
   
+  // Handle back buttons
   if (customId === "back_to_game_menu") {
     return handleGameMenu(interaction);
   }
@@ -184,6 +194,13 @@ if (customId === "casino_bomb") {
     return handleCasinoMenu(interaction);
   }
   
+  // Handle bomb interactions (cell clicks and cashout)
+  if (customId.startsWith("bomb_cell_") || customId === "bomb_cashout") {
+    return handleBombInteraction(interaction);
+  }
+  
+  // Jika tidak ada yang cocok
+  console.log(`[WARNING] Unknown button: ${customId}`);
   return interaction.reply({ content: "❌ Game tidak ditemukan!" });
 }
 

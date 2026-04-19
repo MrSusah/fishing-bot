@@ -1,8 +1,8 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { addCredits, getBalance, removeCredits } = require("../utils/economy");
 
-const GRID_SIZE = 8;
-const TOTAL_BOMBS = 10;
+const GRID_SIZE = 5;
+const TOTAL_BOMBS = 5;
 const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
 
 class BombGame {
@@ -14,6 +14,8 @@ class BombGame {
     this.multiplier = 1.0;
     this.isActive = true;
     this.isCashedOut = false;
+    this.messageId = null;
+    this.channelId = null;
     this.generateBombs();
   }
   
@@ -36,7 +38,7 @@ class BombGame {
       return { success: true, isBomb: true, gameOver: true };
     }
     
-    this.multiplier *= 1.1;
+    this.multiplier = parseFloat((this.multiplier * 1.2).toFixed(2));
     return { success: true, isBomb: false, gameOver: false, multiplier: this.multiplier };
   }
   
@@ -53,8 +55,9 @@ class BombGame {
     return Math.floor(this.betAmount * this.multiplier);
   }
   
-  getGridButtons() {
-    const rows = [];
+  getGridComponents() {
+    const components = [];
+    
     for (let i = 0; i < GRID_SIZE; i++) {
       const row = new ActionRowBuilder();
       for (let j = 0; j < GRID_SIZE; j++) {
@@ -66,18 +69,22 @@ class BombGame {
         let style = ButtonStyle.Secondary;
         let disabled = false;
         
+        // Jika game sudah selesai (bom meledak atau cashout)
         if (!this.isActive) {
-          if (isRevealed) {
-            if (isBomb) {
-              emoji = "💣";
-              style = ButtonStyle.Danger;
-            } else {
-              emoji = "💎";
-              style = ButtonStyle.Success;
-            }
+          if (isBomb) {
+            emoji = "💣";
+            style = ButtonStyle.Danger;
+          } else if (isRevealed) {
+            emoji = "💎";
+            style = ButtonStyle.Success;
+          } else {
+            emoji = "⬛";
+            style = ButtonStyle.Secondary;
           }
           disabled = true;
-        } else if (isRevealed) {
+        } 
+        // Jika sel sudah terbuka
+        else if (isRevealed) {
           emoji = "💎";
           style = ButtonStyle.Success;
           disabled = true;
@@ -86,38 +93,44 @@ class BombGame {
         row.addComponents(
           new ButtonBuilder()
             .setCustomId(`bomb_cell_${index}`)
-            .setLabel(emoji)
+            .setEmoji(emoji)
             .setStyle(style)
             .setDisabled(disabled)
         );
       }
-      rows.push(row);
+      components.push(row);
     }
-    return rows;
+    
+    return components;
   }
   
-  getActionButtons() {
-    const rows = [];
-    const row1 = new ActionRowBuilder();
+  getActionComponents() {
+    const components = [];
+    const row = new ActionRowBuilder();
     
     if (this.isActive && !this.isCashedOut) {
-      row1.addComponents(
+      const winAmount = this.getCurrentWin();
+      row.addComponents(
         new ButtonBuilder()
           .setCustomId("bomb_cashout")
-          .setLabel(`💰 Cashout (${this.getCurrentWin().toLocaleString()} credits)`)
+          .setLabel(`💰 Cashout (${winAmount.toLocaleString()} credits)`)
           .setStyle(ButtonStyle.Success)
       );
     }
     
-    row1.addComponents(
+    row.addComponents(
       new ButtonBuilder()
         .setCustomId("back_to_casino")
-        .setLabel("🎰 Kembali ke Casino")
+        .setLabel("🎰 Casino Menu")
         .setStyle(ButtonStyle.Secondary)
     );
     
-    rows.push(row1);
-    return rows;
+    components.push(row);
+    return components;
+  }
+  
+  getAllComponents() {
+    return [...this.getGridComponents(), ...this.getActionComponents()];
   }
   
   getEmbed() {
@@ -127,18 +140,21 @@ class BombGame {
       .addFields(
         { name: "💰 **Taruhan**", value: `${this.betAmount.toLocaleString()} credits`, inline: true },
         { name: "🎯 **Multiplier**", value: `${this.multiplier.toFixed(2)}x`, inline: true },
-        { name: "💎 **Selamat**", value: `${this.revealedCells.size} selamat`, inline: true },
-        { name: "💣 **Bom**", value: `${TOTAL_BOMBS} bom tersembunyi`, inline: true }
+        { name: "💎 **Selamat**", value: `${this.revealedCells.size} kotak`, inline: true },
+        { name: "💣 **Bom**", value: `${TOTAL_BOMBS} bom`, inline: true },
+        { name: "🎁 **Potensi Menang**", value: `${this.getCurrentWin().toLocaleString()} credits`, inline: true }
       )
       .setTimestamp();
     
     if (!this.isActive && !this.isCashedOut) {
       embed.setDescription("💥 **KAMU KENA BOM!** Semua taruhan hangus! 💥");
+      embed.setColor(0xff0000);
     } else if (this.isCashedOut) {
       const winAmount = this.getCurrentWin();
       embed.setDescription(`✅ **CASHOUT BERHASIL!** Kamu mendapatkan **${winAmount.toLocaleString()}** credits! ✅`);
+      embed.setColor(0xffaa00);
     } else {
-      embed.setDescription("🔍 Klik kotak untuk mencari harta karun! Hindari bom! 💣\n\n⚡ **Aturan:** Setiap kotak aman = multiplier +10% | Kena bom = kalah semua");
+      embed.setDescription(`⚡ **Grid 5x5** dengan **${TOTAL_BOMBS} bom** tersembunyi\n💎 Setiap kotak aman = multiplier +20%\n💣 Kena bom = kalah semua\n💰 Cashout kapan saja!`);
     }
     
     return embed;
@@ -149,9 +165,9 @@ const activeGames = new Map();
 
 async function executeBomb(interaction, amount) {
   try {
-    console.log(`[BOMB] Starting game for ${interaction.user.username} with amount ${amount}`);
+    console.log(`[BOMB] Starting game for ${interaction.user?.username || interaction.user?.id} with amount ${amount}`);
     
-    // Pastikan interaction didefer
+    // Defer reply jika belum
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply();
     }
@@ -168,7 +184,7 @@ async function executeBomb(interaction, amount) {
     
     // Kurangi kredit
     await removeCredits(interaction.user.id, amount, "bomb");
-    console.log(`[BOMB] Removed ${amount} credits from ${interaction.user.username}`);
+    console.log(`[BOMB] Removed ${amount} credits from ${interaction.user.id}`);
     
     // Buat game baru
     const game = new BombGame(interaction.user.id, amount);
@@ -176,15 +192,24 @@ async function executeBomb(interaction, amount) {
     console.log(`[BOMB] Game created for ${interaction.user.id}`);
     
     // Kirim embed dan button
-    const components = [...game.getGridButtons(), ...game.getActionButtons()];
+    const components = game.getAllComponents();
     
-    return interaction.editReply({
+    const reply = await interaction.editReply({
       embeds: [game.getEmbed()],
       components: components
     });
+    
+    // Simpan message ID untuk update nanti
+    game.messageId = reply.id;
+    game.channelId = interaction.channelId;
+    
+    return reply;
+    
   } catch (error) {
     console.error("[BOMB] Error in executeBomb:", error);
-    return interaction.editReply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!" });
+    if (!interaction.replied) {
+      return interaction.editReply({ content: "❌ Terjadi kesalahan saat memulai game Bomb!" });
+    }
   }
 }
 
@@ -222,7 +247,7 @@ async function handleBombInteraction(interaction) {
       
       activeGames.delete(interaction.user.id);
       
-      const components = [...game.getGridButtons(), ...game.getActionButtons()];
+      const components = game.getAllComponents();
       return interaction.update({
         embeds: [game.getEmbed()],
         components: components
@@ -246,7 +271,7 @@ async function handleBombInteraction(interaction) {
         activeGames.delete(interaction.user.id);
       }
       
-      const components = [...game.getGridButtons(), ...game.getActionButtons()];
+      const components = game.getAllComponents();
       return interaction.update({
         embeds: [game.getEmbed()],
         components: components
@@ -261,15 +286,15 @@ async function handleBombInteraction(interaction) {
   }
 }
 
-// Fungsi untuk membersihkan game yang tidak aktif (optional)
+// Cleanup inactive games every 10 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [userId, game] of activeGames.entries()) {
-    // Hapus game yang sudah tidak aktif lebih dari 30 menit
-    if (!game.isActive && game.endTime && now - game.endTime > 1800000) {
+    if (!game.isActive) {
       activeGames.delete(userId);
     }
   }
+  console.log(`[BOMB] Cleanup: ${activeGames.size} active games remaining`);
 }, 600000);
 
 module.exports = { executeBomb, handleBombInteraction };

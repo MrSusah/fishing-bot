@@ -916,7 +916,7 @@ client.on("messageCreate", async (msg) => {
 if (msg.content.startsWith("!bomb")) {
   const args = msg.content.split(" ");
   if (args.length < 2) {
-    return msg.reply("❌ Usage: `!bomb <jumlah>`\nContoh: `!bomb 1000`");
+    return msg.reply("❌ Usage: `!bomb <jumlah>`\nContoh: `!bomb 1000`\n\n💣 Grid 5x5 dengan 5 bom tersembunyi");
   }
   
   const amount = parseInt(args[1]);
@@ -925,11 +925,18 @@ if (msg.content.startsWith("!bomb")) {
     return msg.reply("❌ Jumlah harus berupa angka!");
   }
   
+  if (amount < 10) {
+    return msg.reply("❌ Minimal taruhan adalah **10 credits**!");
+  }
+  
+  // Validasi channel
   if (!isGameAllowedInChannel(msg.channel.id, "bomb")) {
     return msg.reply(`❌ Game **Bomb** hanya bisa dimainkan di **Zona Kasino**! Gunakan channel <#1495050723522641970>`);
   }
   
   // Buat interaction tiruan untuk bomb
+  let lastSentMessage = null;
+  
   const fakeInteraction = {
     user: msg.author,
     username: msg.author.username,
@@ -937,36 +944,50 @@ if (msg.content.startsWith("!bomb")) {
     userId: msg.author.id,
     channelId: msg.channel.id,
     guildId: msg.guild?.id,
+    channel: msg.channel,
     deferred: false,
     replied: false,
     deferReply: async () => {
       fakeInteraction.deferred = true;
     },
     editReply: async (content) => {
-      if (typeof content === 'object') {
-        if (content.embeds) {
-          return msg.reply({ embeds: content.embeds, components: content.components });
+      if (lastSentMessage) {
+        if (typeof content === 'object') {
+          if (content.embeds) {
+            return await lastSentMessage.edit({ embeds: content.embeds, components: content.components });
+          }
+          return await lastSentMessage.edit(content);
         }
-        return msg.reply(content);
+        return await lastSentMessage.edit(content);
       }
-      return msg.reply(content);
+      return fakeInteraction.reply(content);
     },
     reply: async (content) => {
       if (typeof content === 'object') {
         if (content.embeds) {
-          return msg.reply({ embeds: content.embeds, components: content.components });
+          lastSentMessage = await msg.reply({ embeds: content.embeds, components: content.components });
+          return lastSentMessage;
         }
-        return msg.reply(content);
+        lastSentMessage = await msg.reply(content);
+        return lastSentMessage;
       }
-      return msg.reply(content);
+      lastSentMessage = await msg.reply(content);
+      return lastSentMessage;
     },
     update: async (content) => {
-      // Untuk bomb update, kita perlu edit pesan sebelumnya
-      // Simpan messageId untuk edit nanti
-      if (fakeInteraction.lastMessage) {
-        return fakeInteraction.lastMessage.edit(content);
+      if (lastSentMessage) {
+        if (typeof content === 'object') {
+          if (content.embeds) {
+            return await lastSentMessage.edit({ embeds: content.embeds, components: content.components });
+          }
+          return await lastSentMessage.edit(content);
+        }
+        return await lastSentMessage.edit(content);
       }
-      return msg.reply(content);
+      return fakeInteraction.reply(content);
+    },
+    fetchReply: async () => {
+      return lastSentMessage;
     }
   };
   
