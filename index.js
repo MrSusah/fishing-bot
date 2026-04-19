@@ -1160,16 +1160,16 @@ client.on("interactionCreate", async (i) => {
   try {
     const user = await getUser(i.user.id);
     
-    // ===== GAME MENU BUTTONS =====
-    if (i.customId === "game_fishing" || i.customId === "game_hunt" || i.customId === "game_dungeon" || i.customId === "game_casino") {
-      return handleGameButton(i, client);
-    }
-    
-    if (i.customId === "casino_cf" || i.customId === "casino_rps" || i.customId === "casino_slots" || 
-        i.customId === "casino_roulette" || i.customId === "casino_dadu" || i.customId === "casino_bomb" || 
-        i.customId === "casino_fishing") {
-      return handleGameButton(i, client);
-    }
+// Game Menu Buttons
+if (i.customId === "game_fishing" || i.customId === "game_hunt" || i.customId === "game_dungeon" || i.customId === "game_casino") {
+  return handleGameButton(i, client);
+}
+
+if (i.customId === "casino_cf" || i.customId === "casino_rps" || i.customId === "casino_slots" || 
+    i.customId === "casino_roulette" || i.customId === "casino_dadu" || i.customId === "casino_bomb" || 
+    i.customId === "casino_fishing") {
+  return handleGameButton(i, client);
+}
     
     if (i.customId === "back_to_game_menu") {
       return handleGameMenu(i);
