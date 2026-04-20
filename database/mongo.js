@@ -9,9 +9,16 @@ class Database {
     
     async connect(uri, dbName) {
         try {
-            // Mongoose sudah connect di index.js, ini untuk custom handler
-            this.db = mongoose.connection.db;
-            console.log('✅ Database handler connected');
+            // Gunakan koneksi mongoose yang sudah ada
+            if (mongoose.connection.readyState === 1) {
+                this.db = mongoose.connection.db;
+                console.log('✅ Database handler connected using existing Mongoose connection');
+            } else {
+                // Jika belum connect, connect dulu
+                await mongoose.connect(uri);
+                this.db = mongoose.connection.db;
+                console.log('✅ Database handler connected with new connection');
+            }
             return this.db;
         } catch (error) {
             console.error('❌ Database handler error:', error);
@@ -19,15 +26,10 @@ class Database {
         }
     }
     
-    get collection() {
-        return {
-            users: () => this.db.collection('users'),
-            cooldowns: () => this.db.collection('cooldowns'),
-            games: () => this.db.collection('games')
-        };
-    }
-    
     getCollection(name) {
+        if (!this.db) {
+            throw new Error('Database not connected. Call connect() first.');
+        }
         return this.db.collection(name);
     }
     
@@ -66,6 +68,7 @@ try {
     CooldownModel = mongoose.model('Cooldown', cooldownSchema);
 }
 
-module.exports = new Database();
+const database = new Database();
+module.exports = database;
 module.exports.User = UserModel;
 module.exports.Cooldown = CooldownModel;

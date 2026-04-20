@@ -4,13 +4,6 @@ const path = require('path');
 const mongoose = require('mongoose');
 require('dotenv/config');
 
-// Import utilities
-const economy = require('./utils/economy');
-const cooldown = require('./utils/cooldown');
-const channelValidator = require('./utils/channelValidator');
-const GameHandler = require('./handlers/gameHandler');
-const Database = require('./database/mongo');
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -29,112 +22,57 @@ client.games = new Collection();
 // Load commands
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
-if (fs.existsSync(commandsPath)) {
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-    
-    for (const file of commandFiles) {
-        try {
-            const command = require(`./commands/${file}`);
-            if ('data' in command && 'execute' in command) {
-                client.commands.set(command.data.name, command);
-                commands.push(command.data.toJSON());
-                console.log(`✅ Loaded command: ${command.data.name}`);
-            } else if ('name' in command && 'execute' in command) {
-                // For non-slash commands
-                client.commands.set(command.name, command);
-                console.log(`✅ Loaded prefix command: ${command.name}`);
-            }
-        } catch (error) {
-            console.error(`❌ Error loading command ${file}:`, error);
-        }
-    }
-} else {
-    console.log('📁 Folder commands tidak ditemukan, buat folder commands untuk menambahkan slash commands');
+
+// Create commands folder if it doesn't exist
+if (!fs.existsSync(commandsPath)) {
     fs.mkdirSync(commandsPath, { recursive: true });
+    console.log('📁 Created commands folder');
+}
+
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+for (const file of commandFiles) {
+    try {
+        const command = require(`./commands/${file}`);
+        if ('data' in command && 'execute' in command) {
+            client.commands.set(command.data.name, command);
+            commands.push(command.data.toJSON());
+            console.log(`✅ Loaded slash command: ${command.data.name}`);
+        } else if ('name' in command && 'execute' in command) {
+            client.commands.set(command.name, command);
+            console.log(`✅ Loaded prefix command: ${command.name}`);
+        }
+    } catch (error) {
+        console.error(`❌ Error loading command ${file}:`, error.message);
+    }
 }
 
 // Load game modules
 const gamesPath = path.join(__dirname, 'games');
-if (fs.existsSync(gamesPath)) {
-    const gameFiles = fs.readdirSync(gamesPath).filter(file => file.endsWith('.js'));
-    
-    for (const file of gameFiles) {
-        try {
-            const game = require(`./games/${file}`);
-            if (game.name) {
-                client.games.set(game.name, game);
-                console.log(`🎮 Loaded game: ${game.name}`);
-                
-                // Initialize game if it has init function
-                if (game.init && typeof game.init === 'function') {
-                    game.init(client);
-                }
-            } else {
-                // For games that export functions instead of object
-                const gameName = path.basename(file, '.js');
-                client.games.set(gameName, game);
-                console.log(`🎮 Loaded game module: ${gameName}`);
-            }
-        } catch (error) {
-            console.error(`❌ Error loading game ${file}:`, error);
-        }
-    }
-} else {
-    console.log('📁 Folder games tidak ditemukan, buat folder games untuk menambahkan game modules');
+
+// Create games folder if it doesn't exist
+if (!fs.existsSync(gamesPath)) {
     fs.mkdirSync(gamesPath, { recursive: true });
+    console.log('📁 Created games folder');
 }
 
-// Utility function to handle game interactions
-const gameHandler = {
-    async handleButton(interaction, client) {
-        // First, try the new GameHandler
-        try {
-            await GameHandler.handleGameInteraction(interaction);
-            return true;
-        } catch (error) {
-            // If GameHandler doesn't handle it, try individual games
-            for (const [name, game] of client.games) {
-                if (game.handleButton && typeof game.handleButton === 'function') {
-                    try {
-                        const handled = await game.handleButton(interaction, client);
-                        if (handled) return true;
-                    } catch (err) {
-                        console.error(`Error in game ${name} handleButton:`, err);
-                    }
-                }
-            }
+const gameFiles = fs.readdirSync(gamesPath).filter(file => file.endsWith('.js'));
+
+for (const file of gameFiles) {
+    try {
+        const game = require(`./games/${file}`);
+        if (game.name) {
+            client.games.set(game.name, game);
+            console.log(`🎮 Loaded game: ${game.name}`);
+        } else if (typeof game === 'object') {
+            const gameName = path.basename(file, '.js');
+            client.games.set(gameName, game);
+            console.log(`🎮 Loaded game module: ${gameName}`);
         }
-        return false;
-    },
-    
-    async handleSelectMenu(interaction, client) {
-        for (const [name, game] of client.games) {
-            if (game.handleSelectMenu && typeof game.handleSelectMenu === 'function') {
-                try {
-                    const handled = await game.handleSelectMenu(interaction, client);
-                    if (handled) return true;
-                } catch (err) {
-                    console.error(`Error in game ${name} handleSelectMenu:`, err);
-                }
-            }
-        }
-        return false;
-    },
-    
-    async handleMessage(interaction, client) {
-        for (const [name, game] of client.games) {
-            if (game.handleMessage && typeof game.handleMessage === 'function') {
-                try {
-                    const handled = await game.handleMessage(interaction, client);
-                    if (handled) return true;
-                } catch (err) {
-                    console.error(`Error in game ${name} handleMessage:`, err);
-                }
-            }
-        }
-        return false;
+    } catch (error) {
+        console.error(`❌ Error loading game ${file}:`, error.message);
     }
-};
+}
 
 // Ready event
 client.once('ready', async () => {
@@ -156,17 +94,6 @@ client.once('ready', async () => {
         }
     }
     
-    // Trigger ready event for all games
-    for (const [name, game] of client.games) {
-        if (game.onReady && typeof game.onReady === 'function') {
-            try {
-                await game.onReady(client);
-            } catch (err) {
-                console.error(`Error in game ${name} onReady:`, err);
-            }
-        }
-    }
-    
     // Set bot status
     client.user.setPresence({
         activities: [{ name: '!game | !casino', type: 3 }],
@@ -184,7 +111,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ 
                 content: '❌ Command tidak ditemukan!', 
                 ephemeral: true 
-            });
+            }).catch(console.error);
         }
         
         try {
@@ -193,59 +120,36 @@ client.on('interactionCreate', async interaction => {
             console.error(`Error executing command ${interaction.commandName}:`, error);
             const errorMsg = '❌ Terjadi kesalahan saat menjalankan command!';
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: errorMsg, ephemeral: true });
+                await interaction.followUp({ content: errorMsg, ephemeral: true }).catch(console.error);
             } else {
-                await interaction.reply({ content: errorMsg, ephemeral: true });
+                await interaction.reply({ content: errorMsg, ephemeral: true }).catch(console.error);
             }
         }
     }
     
-    // Handle buttons
+    // Handle buttons for games
     if (interaction.isButton()) {
-        try {
-            const handled = await gameHandler.handleButton(interaction, client);
-            if (!handled) {
-                console.log(`⚠️ Unhandled button: ${interaction.customId}`);
-                // Only reply if not already replied
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ 
-                        content: '❌ Tombol ini tidak valid atau sudah kadaluarsa!', 
-                        ephemeral: true 
-                    });
+        // Try to find game that handles this button
+        let handled = false;
+        for (const [name, game] of client.games) {
+            if (game.handleButton && typeof game.handleButton === 'function') {
+                try {
+                    const result = await game.handleButton(interaction, client);
+                    if (result) {
+                        handled = true;
+                        break;
+                    }
+                } catch (err) {
+                    console.error(`Error in game ${name} handleButton:`, err);
                 }
-            }
-        } catch (error) {
-            console.error('Error handling button:', error);
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ 
-                    content: '❌ Terjadi kesalahan saat memproses tombol!', 
-                    ephemeral: true 
-                });
             }
         }
-    }
-    
-    // Handle select menus
-    if (interaction.isStringSelectMenu()) {
-        try {
-            const handled = await gameHandler.handleSelectMenu(interaction, client);
-            if (!handled) {
-                console.log(`⚠️ Unhandled select menu: ${interaction.customId}`);
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ 
-                        content: '❌ Menu ini tidak valid atau sudah kadaluarsa!', 
-                        ephemeral: true 
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error handling select menu:', error);
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ 
-                    content: '❌ Terjadi kesalahan saat memproses menu!', 
-                    ephemeral: true 
-                });
-            }
+        
+        if (!handled && !interaction.replied && !interaction.deferred) {
+            await interaction.reply({ 
+                content: '❌ Tombol ini tidak valid atau sudah kadaluarsa!', 
+                ephemeral: true 
+            }).catch(console.error);
         }
     }
 });
@@ -267,14 +171,11 @@ client.on('messageCreate', async message => {
             await command.executePrefix(message, args, client);
         } catch (error) {
             console.error(`Error executing prefix command ${commandName}:`, error);
-            await message.reply('❌ Terjadi kesalahan saat menjalankan command!');
+            await message.reply('❌ Terjadi kesalahan saat menjalankan command!').catch(console.error);
         }
-    }
-    
-    // Let games handle messages if needed
-    const handled = await gameHandler.handleMessage(message, client);
-    if (!handled) {
-        // Optional: handle non-game messages here
+    } else if (command && command.execute) {
+        // If command only has execute for slash, notify to use slash
+        await message.reply(`❌ Gunakan /${commandName} untuk command ini!`).catch(console.error);
     }
 });
 
@@ -290,28 +191,11 @@ process.on('uncaughtException', error => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('Shutting down gracefully...');
-    await Database.disconnect();
     await mongoose.disconnect();
     client.destroy();
     process.exit(0);
 });
 
 // ================= LOGIN =================
-async function startBot() {
-    try {
-        // Connect to MongoDB
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log('✅ MongoDB connected via Mongoose');
-        
-        // Connect custom database handler
-        await Database.connect(process.env.MONGO_URI, 'discord_bot');
-        
-        // Login bot
-        await client.login(process.env.TOKEN);
-    } catch (error) {
-        console.error('❌ Failed to start bot:', error);
-        process.exit(1);
-    }
-}
-
-startBot();
+mongoose.connect(process.env.MONGO_URI);
+client.login(process.env.TOKEN);
