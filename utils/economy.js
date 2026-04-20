@@ -4,21 +4,31 @@ class EconomyManager {
     static async getBalance(userId) {
         try {
             const user = await User.findOne({ userId });
-            return user?.balance || 0;
+            return user?.credits || 0;
         } catch (error) {
             console.error('Error getting balance:', error);
             return 0;
         }
     }
     
-    static async addCredits(userId, amount) {
+    static async getPoints(userId) {
+        try {
+            const user = await User.findOne({ userId });
+            return user?.points || 0;
+        } catch (error) {
+            console.error('Error getting points:', error);
+            return 0;
+        }
+    }
+    
+    static async addCredits(userId, amount, source = "unknown") {
         if (amount <= 0) return false;
         
         try {
             await User.findOneAndUpdate(
                 { userId },
                 { 
-                    $inc: { balance: amount },
+                    $inc: { credits: amount },
                     $set: { updatedAt: new Date() }
                 },
                 { upsert: true, new: true }
@@ -30,7 +40,7 @@ class EconomyManager {
         }
     }
     
-    static async removeCredits(userId, amount) {
+    static async removeCredits(userId, amount, source = "unknown") {
         if (amount <= 0) return false;
         
         try {
@@ -40,7 +50,7 @@ class EconomyManager {
             await User.findOneAndUpdate(
                 { userId },
                 { 
-                    $inc: { balance: -amount },
+                    $inc: { credits: -amount },
                     $set: { updatedAt: new Date() }
                 }
             );
@@ -48,6 +58,125 @@ class EconomyManager {
         } catch (error) {
             console.error('Error removing credits:', error);
             return false;
+        }
+    }
+    
+    static async addPoints(userId, amount, source = "unknown") {
+        if (amount <= 0) return false;
+        
+        try {
+            await User.findOneAndUpdate(
+                { userId },
+                { 
+                    $inc: { 
+                        points: amount,
+                        seasonPoints: amount,
+                        activityPoints: amount
+                    },
+                    $set: { updatedAt: new Date() }
+                },
+                { upsert: true, new: true }
+            );
+            return true;
+        } catch (error) {
+            console.error('Error adding points:', error);
+            return false;
+        }
+    }
+    
+    static async removePoints(userId, amount, source = "unknown") {
+        if (amount <= 0) return false;
+        
+        try {
+            const points = await this.getPoints(userId);
+            if (points < amount) return false;
+            
+            await User.findOneAndUpdate(
+                { userId },
+                { 
+                    $inc: { points: -amount },
+                    $set: { updatedAt: new Date() }
+                }
+            );
+            return true;
+        } catch (error) {
+            console.error('Error removing points:', error);
+            return false;
+        }
+    }
+    
+    // Convert credits to points (100 credits = 1 point)
+    static async convertCreditsToPoints(userId, creditsAmount) {
+        if (creditsAmount <= 0) return { success: false, message: "Jumlah harus lebih dari 0!" };
+        
+        const pointsAmount = Math.floor(creditsAmount / 100);
+        if (pointsAmount < 1) {
+            return { success: false, message: "Minimal convert 100 credits untuk mendapatkan 1 point!" };
+        }
+        
+        const actualCreditsNeeded = pointsAmount * 100;
+        
+        try {
+            const user = await User.findOne({ userId });
+            if (!user || user.credits < actualCreditsNeeded) {
+                return { success: false, message: `Credit tidak cukup! Butuh ${actualCreditsNeeded} credits untuk ${pointsAmount} points.` };
+            }
+            
+            await User.findOneAndUpdate(
+                { userId },
+                {
+                    $inc: {
+                        credits: -actualCreditsNeeded,
+                        points: pointsAmount,
+                        seasonPoints: pointsAmount,
+                        activityPoints: pointsAmount
+                    }
+                }
+            );
+            
+            return { 
+                success: true, 
+                message: `✅ Berhasil convert ${actualCreditsNeeded} credits → ${pointsAmount} points!`,
+                points: pointsAmount,
+                creditsUsed: actualCreditsNeeded
+            };
+        } catch (error) {
+            console.error('Error converting credits to points:', error);
+            return { success: false, message: "Terjadi kesalahan saat convert!" };
+        }
+    }
+    
+    // Convert points to credits (1 point = 100 credits)
+    static async convertPointsToCredits(userId, pointsAmount) {
+        if (pointsAmount <= 0) return { success: false, message: "Jumlah harus lebih dari 0!" };
+        
+        const creditsAmount = pointsAmount * 100;
+        
+        try {
+            const user = await User.findOne({ userId });
+            if (!user || user.points < pointsAmount) {
+                return { success: false, message: `Point tidak cukup! Punya ${user?.points || 0} points.` };
+            }
+            
+            await User.findOneAndUpdate(
+                { userId },
+                {
+                    $inc: {
+                        credits: creditsAmount,
+                        points: -pointsAmount
+                    }
+                }
+            );
+            
+            return { 
+                success: true, 
+                message: `✅ Berhasil convert ${pointsAmount} points → ${creditsAmount} credits!`,
+                credits: creditsAmount,
+                pointsUsed: pointsAmount
+            };
+        } catch (error) {
+            console.error('Error converting points to credits:', error);
+            return { success: false, message: "Terjadi kesalahan saat convert!" };
         }
     }
     
@@ -67,14 +196,14 @@ class EconomyManager {
                 
                 await User.findOneAndUpdate(
                     { userId: fromUserId },
-                    { $inc: { balance: -amount }, $set: { updatedAt: new Date() } },
+                    { $inc: { credits: -amount }, $set: { updatedAt: new Date() } },
                     { session }
                 );
                 
                 await User.findOneAndUpdate(
                     { userId: toUserId },
                     { 
-                        $inc: { balance: amount },
+                        $inc: { credits: amount },
                         $set: { updatedAt: new Date() },
                         $setOnInsert: { userId: toUserId, createdAt: new Date() }
                     },
@@ -101,7 +230,7 @@ class EconomyManager {
             await User.findOneAndUpdate(
                 { userId },
                 { 
-                    $set: { balance: amount, updatedAt: new Date() },
+                    $set: { credits: amount, updatedAt: new Date() },
                     $setOnInsert: { userId, createdAt: new Date() }
                 },
                 { upsert: true }
@@ -116,13 +245,39 @@ class EconomyManager {
     static async getTopBalance(limit = 10) {
         try {
             const users = await User.find()
-                .sort({ balance: -1 })
+                .sort({ credits: -1 })
                 .limit(limit)
                 .lean();
             return users;
         } catch (error) {
             console.error('Error getting top balance:', error);
             return [];
+        }
+    }
+    
+    static async getTopPoints(limit = 10) {
+        try {
+            const users = await User.find()
+                .sort({ points: -1 })
+                .limit(limit)
+                .lean();
+            return users;
+        } catch (error) {
+            console.error('Error getting top points:', error);
+            return [];
+        }
+    }
+    
+    static async getUser(userId) {
+        try {
+            let user = await User.findOne({ userId });
+            if (!user) {
+                user = await User.create({ userId });
+            }
+            return user;
+        } catch (error) {
+            console.error('Error getting user:', error);
+            return null;
         }
     }
 }

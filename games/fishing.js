@@ -6,6 +6,8 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
+const economy = require('../utils/economy');
+
 const gameModule = {
     name: "fishing",
     version: "1.0.0",
@@ -108,7 +110,7 @@ const gameModule = {
         Legendary: 1 / 100000
     },
     
-    // Fishing zones
+    // Fishing zones (tetap sama seperti sebelumnya)
     fishingZones: {
         "1492058905499402271": [
             { name: "Lele Lumpur", rarity: "Common", value: 5 }, { name: "Gabus", rarity: "Common", value: 6 },
@@ -554,7 +556,7 @@ const gameModule = {
     async onReady(client) {
         console.log("🎣 Fishing game ready!");
         
-        // Start boss spawner
+        // Start boss spawner (every 3 hours)
         setInterval(() => this.spawnBoss(client), 3 * 60 * 60 * 1000);
         
         // Update leaderboard every 24 hours
@@ -574,6 +576,7 @@ const gameModule = {
             );
         }, 60000);
         
+        // Spawn boss immediately on ready
         this.spawnBoss(client);
     },
     
@@ -582,22 +585,22 @@ const gameModule = {
         if (message.content === "!fishing") {
             const row1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId("menu_fish").setLabel("🎣 Fishing").setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId("menu_profile").setLabel("👤 Profile").setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId("menu_index").setLabel("📖 Index").setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId("menu_transfer").setLabel("💸 Transfer").setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId("menu_convert").setLabel("🔄 Convert").setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId("menu_shop").setLabel("🛒 Shop").setStyle(ButtonStyle.Success)
             );
     
             const row2 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId("menu_inventory").setLabel("🎒 Inventory").setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId("menu_sell").setLabel("💰 Sell Fish").setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId("menu_redeem").setLabel("🎁 Hadiah").setStyle(ButtonStyle.Primary)
+                new ButtonBuilder().setCustomId("menu_redeem").setLabel("🎁 Hadiah").setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId("menu_transfer").setLabel("💸 Transfer").setStyle(ButtonStyle.Danger)
             );
     
             const row3 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId("menu_activity").setLabel("📊 Aktivitas").setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId("menu_leaderboard").setLabel("🏆 Fishing LB").setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId("menu_activity_leaderboard").setLabel("📊 Activity LB").setStyle(ButtonStyle.Success)
+                new ButtonBuilder().setCustomId("menu_points_leaderboard").setLabel("⭐ Points LB").setStyle(ButtonStyle.Success)
             );
     
             const components = [row1, row2, row3];
@@ -609,7 +612,7 @@ const gameModule = {
             }
             
             await message.reply({
-                content: "🎮 **FISHING BOT**",
+                content: "🎮 **FISHING BOT**\n💡 100 credits = 1 point | Gunakan !profile untuk lihat profil",
                 components: components
             });
             return true;
@@ -649,11 +652,13 @@ const gameModule = {
             return true;
         }
         
-        // Handle convert command
+        // Handle convert command (credits to points)
         if (message.content.startsWith("!convert")) {
-            const amount = parseInt(message.content.split(" ")[1]);
+            const args = message.content.split(" ");
+            const amount = parseInt(args[1]);
+            
             if (isNaN(amount) || amount <= 0) {
-                await message.reply("❌ !convert jumlah (1 point = 100 credits)");
+                await message.reply("❌ Usage: `!convert <jumlah_credits>`\n\n💡 100 credits = 1 point\nContoh: `!convert 1000` → 10 points");
                 return true;
             }
             
@@ -664,20 +669,81 @@ const gameModule = {
             }
             
             try {
+                const pointsAmount = Math.floor(amount / 100);
+                if (pointsAmount < 1) {
+                    await message.reply("❌ Minimal convert 100 credits untuk mendapatkan 1 point!");
+                    return true;
+                }
+                
+                const actualCreditsNeeded = pointsAmount * 100;
                 const user = await this.getUser(message.author.id);
-                const creditsNeeded = amount * 100;
-                if (user.credits < creditsNeeded) {
-                    await message.reply(`❌ Butuh ${creditsNeeded} credits`);
+                
+                if (user.credits < actualCreditsNeeded) {
+                    await message.reply(`❌ Credit tidak cukup! Butuh ${actualCreditsNeeded} credits untuk ${pointsAmount} points.`);
                     return true;
                 }
                 
                 await this.User.updateOne(
-                    { userId: message.author.id, credits: { $gte: creditsNeeded } },
-                    { $inc: { credits: -creditsNeeded, points: amount, seasonPoints: amount, activityPoints: amount } }
+                    { userId: message.author.id },
+                    {
+                        $inc: {
+                            credits: -actualCreditsNeeded,
+                            points: pointsAmount,
+                            seasonPoints: pointsAmount,
+                            activityPoints: pointsAmount
+                        }
+                    }
                 );
                 
-                const updatedUser = await this.getUser(message.author.id);
-                await message.reply(`✅ Convert ${amount} points! Sisa credits: ${updatedUser.credits}`);
+                await message.reply(`✅ Berhasil convert ${actualCreditsNeeded} credits → ${pointsAmount} points!`);
+            } catch (error) {
+                console.error("Convert error:", error);
+                await message.reply("❌ Terjadi kesalahan saat convert!");
+            } finally {
+                this.releaseLock(lockKey);
+            }
+            return true;
+        }
+        
+        // Handle convertpoint command (points to credits)
+        if (message.content.startsWith("!convertpoint") || message.content.startsWith("!cp")) {
+            const args = message.content.split(" ");
+            const amount = parseInt(args[1]);
+            
+            if (isNaN(amount) || amount <= 0) {
+                await message.reply("❌ Usage: `!convertpoint <jumlah_points>`\n\n💡 1 point = 100 credits\nContoh: `!convertpoint 10` → 1000 credits");
+                return true;
+            }
+            
+            const lockKey = this.acquireLock(message.author.id, "convertpoint", 5000);
+            if (!lockKey) {
+                await message.reply("⏳ Proses convert sedang berjalan, tunggu sebentar!");
+                return true;
+            }
+            
+            try {
+                const creditsAmount = amount * 100;
+                const user = await this.getUser(message.author.id);
+                
+                if (user.points < amount) {
+                    await message.reply(`❌ Point tidak cukup! Punya ${user.points} points.`);
+                    return true;
+                }
+                
+                await this.User.updateOne(
+                    { userId: message.author.id },
+                    {
+                        $inc: {
+                            credits: creditsAmount,
+                            points: -amount
+                        }
+                    }
+                );
+                
+                await message.reply(`✅ Berhasil convert ${amount} points → ${creditsAmount} credits!`);
+            } catch (error) {
+                console.error("Convert point error:", error);
+                await message.reply("❌ Terjadi kesalahan saat convert!");
             } finally {
                 this.releaseLock(lockKey);
             }
@@ -687,7 +753,20 @@ const gameModule = {
         // Handle points command
         if (message.content === "!points") {
             const user = await this.getUser(message.author.id);
-            await message.reply(`⭐ Points: ${user.points} | 🏆 Season: ${user.seasonPoints} | 📈 Activity: ${user.activityPoints} | 💰 Total Fishing: ${user.totalFishingCredits.toLocaleString()}`);
+            const embed = new EmbedBuilder()
+                .setTitle(`⭐ ${message.author.username}'s Points`)
+                .setColor(0xffd700)
+                .addFields(
+                    { name: "💰 Total Points", value: `${user.points.toLocaleString()} points`, inline: true },
+                    { name: "🏆 Season Points", value: `${user.seasonPoints.toLocaleString()} points`, inline: true },
+                    { name: "📈 Activity Points", value: `${user.activityPoints.toLocaleString()} points`, inline: true },
+                    { name: "💎 Credits", value: `${user.credits.toLocaleString()} credits`, inline: true },
+                    { name: "🔄 Konversi", value: "100 credits = 1 point\n1 point = 100 credits", inline: false }
+                )
+                .setFooter({ text: "Gunakan !convert <credits> atau !convertpoint <points>" })
+                .setTimestamp();
+            
+            await message.reply({ embeds: [embed] });
             return true;
         }
         
@@ -703,16 +782,6 @@ const gameModule = {
                 }
             }
             
-            if (message.content.startsWith("!removecredit")) {
-                const target = message.mentions.users.first();
-                const amount = parseInt(message.content.split(" ")[2]);
-                if (target && !isNaN(amount)) {
-                    await this.User.updateOne({ userId: target.id, credits: { $gte: amount } }, { $inc: { credits: -amount } });
-                    await message.reply(`❌ -${amount} credits dari ${target.username}`);
-                    return true;
-                }
-            }
-            
             if (message.content.startsWith("!addpoints")) {
                 const target = message.mentions.users.first();
                 const amount = parseInt(message.content.split(" ")[2]);
@@ -723,29 +792,11 @@ const gameModule = {
                 }
             }
             
-            if (message.content.startsWith("!checkprofile")) {
-                const target = message.mentions.users.first();
-                if (target) {
-                    const u = await this.getUser(target.id);
-                    await message.reply(`👤 ${target.username}\n⭐ Points: ${u.points}\n💰 Credits: ${u.credits}\n🏆 Season: ${u.seasonPoints}\n📈 Activity: ${u.activityPoints}\n💰 Total Fishing: ${u.totalFishingCredits.toLocaleString()}\n🐟 Total Ikan: ${u.totalFishCaught || 0}\n🎣 Season Fish: ${u.seasonFishCaught}`);
-                    return true;
-                }
-            }
-            
             if (message.content.startsWith("!globalluck")) {
                 const val = parseFloat(message.content.split(" ")[1]);
                 if (!isNaN(val)) {
                     this.globalLuckBoost = val;
                     await message.reply(`🌍 Global luck: x${this.globalLuckBoost}`);
-                    return true;
-                }
-            }
-            
-            if (message.content.startsWith("!setluck")) {
-                const args = message.content.split(" ");
-                if (args[1] && args[2]) {
-                    this.channelBoost[args[1]] = parseFloat(args[2]);
-                    await message.reply(`✅ Channel luck set ke x${this.channelBoost[args[1]]}`);
                     return true;
                 }
             }
@@ -831,40 +882,30 @@ const gameModule = {
                 return true;
             }
             
-            // Profile button
-            if (interaction.customId === "menu_profile") {
-                await interaction.deferReply({ flags: 64 });
-                
-                let totalFish = user.totalFishCaught || 0;
-                const totalJenis = user.fishInventory?.size || 0;
-                
-                const profileEmbed = {
-                    embeds: [{
-                        title: `🎣 ${interaction.user.username}'s Fishing Profile`,
-                        color: 0x00ae86,
-                        thumbnail: { url: interaction.user.displayAvatarURL() },
-                        fields: [
-                            { name: "💰 **Credits**", value: `${user.credits.toLocaleString()} credits`, inline: true },
-                            { name: "⭐ **Points**", value: `${user.points.toLocaleString()} points`, inline: true },
-                            { name: "📈 **Activity Points**", value: `${user.activityPoints.toLocaleString()} pts`, inline: true },
-                            { name: "🏆 **Total Fishing Credits**", value: `${user.totalFishingCredits.toLocaleString()} credits`, inline: true },
-                            { name: "🐟 **Total Ikan**", value: `${totalFish} ekor`, inline: true },
-                            { name: "📋 **Jenis Ikan**", value: `${totalJenis} jenis`, inline: true }
-                        ],
-                        timestamp: new Date()
-                    }]
-                };
-                
-                await interaction.editReply(profileEmbed);
-                return true;
-            }
-            
             // Transfer button
             if (interaction.customId === "menu_transfer") {
                 await interaction.reply({
                     content: "💸 **TRANSFER CREDITS**\n\nGunakan command:\n`!transfer @user jumlah`\n\nContoh: `!transfer @Kame 1000`\n\n⚠️ Minimal transfer 100 credits",
                     flags: 64
                 });
+                return true;
+            }
+            
+            // Convert button
+            if (interaction.customId === "menu_convert") {
+                const embed = new EmbedBuilder()
+                    .setTitle("🔄 **CONVERT CREDITS ↔ POINTS**")
+                    .setDescription("Konversi antara Credits dan Points!")
+                    .setColor(0x00ff88)
+                    .addFields(
+                        { name: "📥 Credits → Points", value: "`!convert <jumlah_credits>`\n100 credits = 1 point", inline: true },
+                        { name: "📤 Points → Credits", value: "`!convertpoint <jumlah_points>` atau `!cp <jumlah>`\n1 point = 100 credits", inline: true },
+                        { name: "⭐ Cek Points", value: "`!points`", inline: true }
+                    )
+                    .setFooter({ text: "Contoh: !convert 1000 → 10 points" })
+                    .setTimestamp();
+                
+                await interaction.reply({ embeds: [embed], flags: 64 });
                 return true;
             }
             
@@ -888,8 +929,65 @@ const gameModule = {
                 return true;
             }
             
-            if (interaction.customId === "menu_activity_leaderboard") {
-                await interaction.reply({ content: "📊 Activity Leaderboard coming soon!", flags: 64 });
+            if (interaction.customId === "menu_points_leaderboard") {
+                await interaction.deferReply({ flags: 64 });
+                
+                const topUsers = await this.User.find({ userId: { $ne: this.OWNER_ID } })
+                    .sort({ points: -1 })
+                    .limit(10);
+                
+                let leaderboardText = "🏆 **TOP 10 PLAYERS BY POINTS** 🏆\n\n";
+                
+                for (let i = 0; i < topUsers.length; i++) {
+                    const userPoint = topUsers[i];
+                    let name = "Unknown";
+                    try {
+                        const d = await client.users.fetch(userPoint.userId);
+                        name = d.username;
+                    } catch {}
+                    
+                    const medal = i === 0 ? "👑" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i+1}.`;
+                    leaderboardText += `${medal} **${name}** - ${userPoint.points.toLocaleString()} points\n`;
+                }
+                
+                const embed = new EmbedBuilder()
+                    .setTitle("⭐ POINTS LEADERBOARD")
+                    .setDescription(leaderboardText)
+                    .setColor(0xffd700)
+                    .setFooter({ text: "💡 100 credits = 1 point" })
+                    .setTimestamp();
+                
+                await interaction.editReply({ embeds: [embed] });
+                return true;
+            }
+            
+            // Index menu button
+            if (interaction.customId === "menu_index") {
+                const zoneOptions = [];
+                for (const channelId of this.FISHING_CHANNELS) {
+                    zoneOptions.push({
+                        label: this.getZoneName(channelId),
+                        description: `Lihat daftar ikan di zona ini`,
+                        value: channelId,
+                        emoji: "📖"
+                    });
+                }
+                
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId("index_map")
+                    .setPlaceholder("Pilih zona fishing...")
+                    .addOptions(zoneOptions);
+                
+                const row = new ActionRowBuilder().addComponents(selectMenu);
+                const backBtn = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId("back_to_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
+                );
+                
+                await interaction.reply({
+                    content: "📖 **Pilih zona fishing untuk melihat daftar ikan:**",
+                    components: [row, backBtn],
+                    flags: 64
+                });
                 return true;
             }
             
@@ -897,24 +995,24 @@ const gameModule = {
             if (interaction.customId === "back_to_menu") {
                 const row1 = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId("menu_fish").setLabel("🎣 Fishing").setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId("menu_profile").setLabel("👤 Profile").setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId("menu_index").setLabel("📖 Index").setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId("menu_transfer").setLabel("💸 Transfer").setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId("menu_convert").setLabel("🔄 Convert").setStyle(ButtonStyle.Primary),
                     new ButtonBuilder().setCustomId("menu_shop").setLabel("🛒 Shop").setStyle(ButtonStyle.Success)
                 );
-                
+        
                 const row2 = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId("menu_inventory").setLabel("🎒 Inventory").setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId("menu_sell").setLabel("💰 Sell Fish").setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId("menu_redeem").setLabel("🎁 Hadiah").setStyle(ButtonStyle.Primary)
+                    new ButtonBuilder().setCustomId("menu_redeem").setLabel("🎁 Hadiah").setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId("menu_transfer").setLabel("💸 Transfer").setStyle(ButtonStyle.Danger)
                 );
-                
+        
                 const row3 = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId("menu_activity").setLabel("📊 Aktivitas").setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId("menu_leaderboard").setLabel("🏆 Fishing LB").setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId("menu_activity_leaderboard").setLabel("📊 Activity LB").setStyle(ButtonStyle.Success)
+                    new ButtonBuilder().setCustomId("menu_points_leaderboard").setLabel("⭐ Points LB").setStyle(ButtonStyle.Success)
                 );
-                
+        
                 const components = [row1, row2, row3];
                 if (this.ADMIN_IDS.includes(interaction.user.id)) {
                     const adminRow = new ActionRowBuilder().addComponents(
@@ -924,17 +1022,15 @@ const gameModule = {
                 }
                 
                 await interaction.update({
-                    content: "🎮 **FISHING BOT**",
+                    content: "🎮 **FISHING BOT**\n💡 100 credits = 1 point | Gunakan !profile untuk lihat profil",
                     components: components
                 });
                 return true;
             }
             
-            // Shop, Inventory, Sell, Redeem, Index handlers (simplified for brevity)
-            // You can add the full implementations here
-            
         } catch (error) {
             console.error("Error in fishing button handler:", error);
+            await interaction.reply({ content: "❌ Terjadi kesalahan!", flags: 64 }).catch(() => {});
         }
         
         return false;
@@ -970,7 +1066,7 @@ const gameModule = {
             text += `└─────────────────────────────┘\n\n✨ Total: ${zone.length} jenis ikan`;
             
             const backBtn = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId("menu_index").setLabel("🔙 Kembali ke Pilih Zona").setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId("back_to_menu").setLabel("🔙 Kembali ke Menu").setStyle(ButtonStyle.Secondary)
             );
             
             await interaction.update({ content: text, components: [backBtn] });

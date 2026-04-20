@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { addCredits, removeCredits, getBalance } = require("../utils/economy");
+const economy = require("../utils/economy");
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 const BLACK_NUMBERS = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
@@ -10,10 +10,10 @@ function getNumberColor(number) {
   return "black";
 }
 
-async function executeRoulette(interaction, side, amount) {
+async function executeRoulette(interaction, amount, side, client) {
   await interaction.deferReply({ flags: 64 });
   
-  const balance = await getBalance(interaction.user.id);
+  const balance = await economy.getBalance(interaction.user.id);
   
   if (amount < 10) {
     return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
@@ -64,14 +64,14 @@ async function executeRoulette(interaction, side, amount) {
   
   if (multiplier > 0) {
     const winAmount = amount * multiplier;
-    await addCredits(interaction.user.id, winAmount, "roulette");
+    await economy.addCredits(interaction.user.id, winAmount);
     embed.addFields({ name: "✅ **MENANG!**", value: `${winText} Kamu menang **${winAmount.toLocaleString()}** credits! (x${multiplier})`, inline: false });
   } else {
-    await removeCredits(interaction.user.id, amount, "roulette");
+    await economy.removeCredits(interaction.user.id, amount);
     embed.addFields({ name: "❌ **KALAH!**", value: `Kamu kehilangan **${amount.toLocaleString()}** credits!`, inline: false });
   }
   
-  const newBalance = await getBalance(interaction.user.id);
+  const newBalance = await economy.getBalance(interaction.user.id);
   embed.setFooter({ text: `💰 Saldo sekarang: ${newBalance.toLocaleString()} credits` });
   
   const row = new ActionRowBuilder().addComponents(

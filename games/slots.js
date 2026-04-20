@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { addCredits, removeCredits, getBalance } = require("../utils/economy");
+const economy = require("../utils/economy");
 
 const SLOTS_EMOJIS = ["🍒", "🍋", "🍊", "🍉", "🎰", "💎", "🍇", "🔔", "🍓", "🥝"];
 const SLOTS_MULTIPLIERS = {
@@ -15,10 +15,10 @@ const SLOTS_MULTIPLIERS = {
   "🥝": { pair: 1.5, triple: 3 }
 };
 
-async function executeSlots(interaction, amount) {
+async function executeSlots(interaction, amount, client) {
   await interaction.deferReply({ flags: 64 });
   
-  const balance = await getBalance(interaction.user.id);
+  const balance = await economy.getBalance(interaction.user.id);
   
   if (amount < 10) {
     return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
@@ -51,10 +51,10 @@ async function executeSlots(interaction, amount) {
   
   if (multiplier > 0) {
     winAmount = Math.floor(amount * multiplier);
-    await addCredits(interaction.user.id, winAmount, "slots");
+    await economy.addCredits(interaction.user.id, winAmount);
     embedColor = 0x00ff00;
   } else {
-    await removeCredits(interaction.user.id, amount, "slots");
+    await economy.removeCredits(interaction.user.id, amount);
     embedColor = 0xff0000;
   }
   
@@ -74,7 +74,7 @@ async function executeSlots(interaction, amount) {
     embed.addFields({ name: "💸 **Kekalahan**", value: `-${amount.toLocaleString()} credits`, inline: true });
   }
   
-  const newBalance = await getBalance(interaction.user.id);
+  const newBalance = await economy.getBalance(interaction.user.id);
   embed.setFooter({ text: `💰 Saldo sekarang: ${newBalance.toLocaleString()} credits` });
   
   const row = new ActionRowBuilder().addComponents(

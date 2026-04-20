@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { addCredits, removeCredits, getBalance } = require("../utils/economy");
+const economy = require("../utils/economy");
 
 const choices = ["rock", "paper", "scissors"];
 const emojiMap = { rock: "🪨", paper: "📄", scissors: "✂️" };
@@ -17,10 +17,10 @@ function getWinner(player, bot) {
   return "bot";
 }
 
-async function executeRPS(interaction, choice, amount) {
+async function executeRPS(interaction, choice, amount, client) {
   await interaction.deferReply({ flags: 64 });
   
-  const balance = await getBalance(interaction.user.id);
+  const balance = await economy.getBalance(interaction.user.id);
   
   if (amount < 10) {
     return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
@@ -49,17 +49,17 @@ async function executeRPS(interaction, choice, amount) {
   
   if (winner === "player") {
     const winAmount = amount * 2;
-    await addCredits(interaction.user.id, winAmount, "rps");
+    await economy.addCredits(interaction.user.id, winAmount);
     embed.addFields({ name: "✅ **MENANG!**", value: `Kamu menang **${winAmount.toLocaleString()}** credits!`, inline: false });
   } else if (winner === "bot") {
-    await removeCredits(interaction.user.id, amount, "rps");
+    await economy.removeCredits(interaction.user.id, amount);
     embed.addFields({ name: "❌ **KALAH!**", value: `Kamu kehilangan **${amount.toLocaleString()}** credits!`, inline: false });
   } else {
-    await addCredits(interaction.user.id, amount, "rps");
+    await economy.addCredits(interaction.user.id, amount);
     embed.addFields({ name: "🤝 **SERI!**", value: `Uang dikembalikan **${amount.toLocaleString()}** credits!`, inline: false });
   }
   
-  const newBalance = await getBalance(interaction.user.id);
+  const newBalance = await economy.getBalance(interaction.user.id);
   embed.setFooter({ text: `💰 Saldo sekarang: ${newBalance.toLocaleString()} credits` });
   
   const row = new ActionRowBuilder().addComponents(
