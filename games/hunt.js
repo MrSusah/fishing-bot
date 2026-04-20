@@ -1,55 +1,62 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { addCredits, getUser } = require("../utils/economy");
-const { checkCooldown, updateCooldown, formatCooldown } = require("../utils/cooldown");
+const { EmbedBuilder } = require('discord.js');
+const economy = require('../utils/economy');
+const cooldown = require('../utils/cooldown');
 
-const ANIMALS = [
-  "rusa", "harimau", "kelinci", "beruang", "serigala", "babi hutan", "kancil", 
-  "buaya", "ular", "elang", "kijang", "macan tutul", "gajah", "badak", 
-  "jerapah", "zebra", "singa", "cheetah", "kuda nil", "komodo"
-];
+const animals = ['rusa', 'harimau', 'kelinci', 'beruang', 'serigala', 'babi hutan', 'kancil', 'buaya', 'ular', 'elang', 'kijang', 'macan tutul', 'gajah', 'badak', 'jerapah', 'zebra', 'singa', 'cheetah', 'kuda nil', 'komodo'];
 
-async function executeHunt(interaction) {
-  await interaction.deferReply();
-  
-  const cooldown = await checkCooldown(interaction.user.id, "hunt");
-  if (!cooldown.available) {
-    const timeLeft = await formatCooldown(cooldown.timeLeft);
-    return interaction.editReply({ 
-      content: `⏳ **Cooldown!** Kamu harus menunggu **${timeLeft}** sebelum berburu lagi.` 
-    });
-  }
-  
-  const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
-  const isWin = Math.random() < 0.6;
-  
-  let embed = new EmbedBuilder()
-    .setTitle("🏹 **PERBURUAN** 🏹")
-    .setColor(isWin ? 0x00ff00 : 0xff0000)
-    .setDescription(`Kamu berburu ${animal}... 🏹`)
-    .setTimestamp();
-  
-  if (isWin) {
-    const reward = Math.floor(Math.random() * (500 - 50 + 1)) + 50;
-    await addCredits(interaction.user.id, reward, "hunt");
-    await updateCooldown(interaction.user.id, "hunt");
+module.exports = {
+    name: 'hunt',
     
-    embed.addFields(
-      { name: "✅ **BERHASIL!**", value: `Kamu berhasil menangkap **${animal}**!`, inline: false },
-      { name: "💰 **Hadiah**", value: `+${reward.toLocaleString()} credits`, inline: true }
-    );
-  } else {
-    await updateCooldown(interaction.user.id, "hunt");
-    embed.addFields(
-      { name: "❌ **GAGAL!**", value: `${animal} berhasil melarikan diri...`, inline: false },
-      { name: "💰 **Hadiah**", value: `0 credits`, inline: true }
-    );
-  }
-  
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("back_to_game_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
-  );
-  
-  return interaction.editReply({ embeds: [embed], components: [row] });
-}
+    async execute(interaction, client) {
+        await interaction.deferReply();
+        
+        const userId = interaction.user.id;
+        const username = interaction.user.username;
+        
+        const result = await this.startHunt(userId, username);
+        
+        if (result.error) {
+            return interaction.editReply({ content: result.message });
+        }
+        
+        await interaction.editReply({ embeds: [result.embed] });
+    },
+    
+    async startHunt(userId, username) {
+        // Cek cooldown 1 jam
+        const cdCheck = await cooldown.checkCooldown(userId, 'hunt', 3600000);
+        if (!cdCheck.allowed) {
+            return {
+                error: true,
+                message: `⏰ Cooldown! Kamu bisa berburu lagi ${cdCheck.timeLeft}`
+            };
+        }
 
-module.exports = { executeHunt };
+        const animal = animals[Math.floor(Math.random() * animals.length)];
+        const winChance = Math.random() < 0.6; // 60% win chance
+        const reward = winChance ? Math.floor(Math.random() * 151) + 50 : 0; // 50-200 credits
+
+        if (winChance && reward > 0) {
+            await economy.addCredits(userId, reward);
+            await cooldown.setCooldown(userId, 'hunt');
+            
+            const embed = new EmbedBuilder()
+                .setColor('#00ff00')
+                .setTitle('🏹 PERBURUAN BERHASIL! 🏹')
+                .setDescription(`Kamu berburu **${animal}**... 🏹\n\n✨ **BERHASIL!** ✨\n+${reward} credits`)
+                .setFooter({ text: username });
+            
+            return { embed, reward };
+        } else {
+            await cooldown.setCooldown(userId, 'hunt');
+            
+            const embed = new EmbedBuilder()
+                .setColor('#ff0000')
+                .setTitle('😔 PERBURUAN GAGAL 😔')
+                .setDescription(`Kamu berburu **${animal}**... 🏹\n\n💔 **GAGAL!** 💔\n+0 credits`)
+                .setFooter({ text: username });
+            
+            return { embed, reward: 0 };
+        }
+    }
+};

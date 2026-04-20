@@ -1,55 +1,62 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { addCredits, getUser } = require("../utils/economy");
-const { checkCooldown, updateCooldown, formatCooldown } = require("../utils/cooldown");
+const { EmbedBuilder } = require('discord.js');
+const economy = require('../utils/economy');
+const cooldown = require('../utils/cooldown');
 
-const MONSTERS = [
-  "goblin", "orc", "troll", "ogre", "skeleton", "zombie", "hantu", 
-  "vampire", "werewolf", "naga", "cyclops", "minotaur", "chimera", 
-  "griffin", "hydra", "phoenix", "lich", "demon", "dragon", "titan"
-];
+const monsters = ['goblin', 'orc', 'troll', 'ogre', 'skeleton', 'zombie', 'hantu', 'vampire', 'werewolf', 'naga', 'cyclops', 'minotaur', 'chimera', 'griffin', 'hydra', 'phoenix', 'lich', 'demon', 'dragon', 'titan'];
 
-async function executeDungeon(interaction) {
-  await interaction.deferReply();
-  
-  const cooldown = await checkCooldown(interaction.user.id, "dungeon");
-  if (!cooldown.available) {
-    const timeLeft = await formatCooldown(cooldown.timeLeft);
-    return interaction.editReply({ 
-      content: `⏳ **Cooldown!** Kamu harus menunggu **${timeLeft}** sebelum masuk dungeon lagi.` 
-    });
-  }
-  
-  const monster = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
-  const isWin = Math.random() < 0.4;
-  
-  let embed = new EmbedBuilder()
-    .setTitle("⚔️ **DUNGEON** ⚔️")
-    .setColor(isWin ? 0x00ff00 : 0xff0000)
-    .setDescription(`Kamu memasuki dungeon dan bertemu ${monster}... ⚔️`)
-    .setTimestamp();
-  
-  if (isWin) {
-    const reward = Math.floor(Math.random() * (2000 - 200 + 1)) + 200;
-    await addCredits(interaction.user.id, reward, "dungeon");
-    await updateCooldown(interaction.user.id, "dungeon");
+module.exports = {
+    name: 'dungeon',
     
-    embed.addFields(
-      { name: "✅ **BERHASIL!**", value: `Kamu berhasil mengalahkan **${monster}**!`, inline: false },
-      { name: "💰 **Hadiah**", value: `+${reward.toLocaleString()} credits`, inline: true }
-    );
-  } else {
-    await updateCooldown(interaction.user.id, "dungeon");
-    embed.addFields(
-      { name: "❌ **GAGAL!**", value: `${monster} mengalahkanmu...`, inline: false },
-      { name: "💰 **Hadiah**", value: `0 credits`, inline: true }
-    );
-  }
-  
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("back_to_game_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
-  );
-  
-  return interaction.editReply({ embeds: [embed], components: [row] });
-}
+    async execute(interaction, client) {
+        await interaction.deferReply();
+        
+        const userId = interaction.user.id;
+        const username = interaction.user.username;
+        
+        const result = await this.startDungeon(userId, username);
+        
+        if (result.error) {
+            return interaction.editReply({ content: result.message });
+        }
+        
+        await interaction.editReply({ embeds: [result.embed] });
+    },
+    
+    async startDungeon(userId, username) {
+        // Cek cooldown 2 jam
+        const cdCheck = await cooldown.checkCooldown(userId, 'dungeon', 7200000);
+        if (!cdCheck.allowed) {
+            return {
+                error: true,
+                message: `⏰ Cooldown! Kamu bisa masuk dungeon lagi ${cdCheck.timeLeft}`
+            };
+        }
 
-module.exports = { executeDungeon };
+        const monster = monsters[Math.floor(Math.random() * monsters.length)];
+        const winChance = Math.random() < 0.4; // 40% win chance
+        const reward = winChance ? Math.floor(Math.random() * 801) + 200 : 0; // 200-1000 credits
+
+        if (winChance && reward > 0) {
+            await economy.addCredits(userId, reward);
+            await cooldown.setCooldown(userId, 'dungeon');
+            
+            const embed = new EmbedBuilder()
+                .setColor('#9b59b6')
+                .setTitle('⚔️ KEMENANGAN EPIC! ⚔️')
+                .setDescription(`Kamu memasuki dungeon dan bertemu **${monster}**... ⚔️\n\n✨ **BERHASIL MENGALAHKANNYA!** ✨\n+${reward} credits`)
+                .setFooter({ text: username });
+            
+            return { embed, reward };
+        } else {
+            await cooldown.setCooldown(userId, 'dungeon');
+            
+            const embed = new EmbedBuilder()
+                .setColor('#ff0000')
+                .setTitle('💀 KEGAGALAN FATAL 💀')
+                .setDescription(`Kamu memasuki dungeon dan bertemu **${monster}**... ⚔️\n\n💀 **KAMU DIKALAHKAN!** 💀\n+0 credits`)
+                .setFooter({ text: username });
+            
+            return { embed, reward: 0 };
+        }
+    }
+};  
