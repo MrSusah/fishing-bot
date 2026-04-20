@@ -1,36 +1,47 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const economy = require('../utils/economy');
+const cooldown = require('../utils/cooldown');
+const channelValidator = require('../utils/channelValidator');
 
 module.exports = {
-  name: "game",
-  description: "Menampilkan menu game dengan tombol interaktif",
-  
-  async execute(message, args, client) {
-    const embed = new EmbedBuilder()
-      .setTitle("🎮 **GAME MENU** 🎮")
-      .setDescription("Pilih menu di bawah ini!\n\n💡 **Info:**\n• 100 credits = 1 point\n• Gunakan `!profile` untuk lihat profil\n• Gunakan `!points` untuk lihat points\n• Gunakan `!activity` untuk lihat aktivitas")
-      .setColor(0x5865f2)
-      .setTimestamp()
-      .setFooter({ text: `Diminta oleh ${message.author.username}`, iconURL: message.author.displayAvatarURL() });
+    name: 'game',
+    description: 'Menu utama game',
     
-    const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("game_fishing").setLabel("🎣 Fishing").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("game_hunt").setLabel("🏹 Hunt").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("game_dungeon").setLabel("🏰 Dungeon").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("game_casino").setLabel("🎰 Casino").setStyle(ButtonStyle.Secondary)
-    );
-    
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("game_profile").setLabel("👤 Profile").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("game_activity").setLabel("📊 Activity").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("game_reward").setLabel("🎁 Reward").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("game_transfer").setLabel("💸 Transfer").setStyle(ButtonStyle.Danger)
-    );
-    
-    const row3 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("game_leaderboard").setLabel("🏆 Leaderboard").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Menu Utama").setStyle(ButtonStyle.Secondary)
-    );
-    
-    return message.reply({ embeds: [embed], components: [row1, row2, row3] });
-  }
+    async executePrefix(message, args, client) {
+        const allowedChannelId = '1494682289530081413';
+        if (message.channelId !== allowedChannelId) {
+            return message.reply(`❌ Game hanya bisa dijalankan di channel <#${allowedChannelId}>!`);
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('🎮 Pilih Game')
+            .setDescription('Klik tombol di bawah untuk memulai game!')
+            .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
+
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`game_fishing_${message.author.id}`)
+                    .setLabel('🎣 Fishing')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`game_hunt_${message.author.id}`)
+                    .setLabel('🏹 Hunt')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`game_dungeon_${message.author.id}`)
+                    .setLabel('🏰 Dungeon')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId(`game_casino_${message.author.id}`)
+                    .setLabel('🎰 Casino')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+
+        await message.reply({
+            embeds: [embed],
+            components: [row]
+        });
+    }
 };

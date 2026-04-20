@@ -1,57 +1,61 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const economy = require("../utils/economy");
+const { EmbedBuilder } = require('discord.js');
+const economy = require('../utils/economy');
+const channelValidator = require('../utils/channelValidator');
 
-async function executeCF(interaction, choice, amount, client) {
-  await interaction.deferReply({ flags: 64 });
-  
-  const balance = await economy.getBalance(interaction.user.id);
-  
-  if (amount < 10) {
-    return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
-  }
-  
-  if (balance < amount) {
-    return interaction.editReply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits` });
-  }
-  
-  const validChoices = ["kepala", "ekor"];
-  if (!validChoices.includes(choice.toLowerCase())) {
-    return interaction.editReply({ content: "❌ Pilihan harus **kepala** atau **ekor**!" });
-  }
-  
-  const result = Math.random() < 0.3 ? choice.toLowerCase() : (choice.toLowerCase() === "kepala" ? "ekor" : "kepala");
-  const isWin = result === choice.toLowerCase();
-  
-  let embed = new EmbedBuilder()
-    .setTitle("🪙 **COIN FLIP** 🪙")
-    .setColor(isWin ? 0x00ff00 : 0xff0000)
-    .addFields(
-      { name: "🎲 **Pilihanmu**", value: choice.toUpperCase(), inline: true },
-      { name: "🪙 **Hasil**", value: result.toUpperCase(), inline: true }
-    )
-    .setTimestamp();
-  
-  if (isWin) {
-    const winAmount = amount * 2;
-    await economy.addCredits(interaction.user.id, winAmount);
-    embed.addFields(
-      { name: "✅ **MENANG!**", value: `Kamu menang **${winAmount.toLocaleString()}** credits!`, inline: false }
-    );
-  } else {
-    await economy.removeCredits(interaction.user.id, amount);
-    embed.addFields(
-      { name: "❌ **KALAH!**", value: `Kamu kehilangan **${amount.toLocaleString()}** credits!`, inline: false }
-    );
-  }
-  
-  const newBalance = await economy.getBalance(interaction.user.id);
-  embed.setFooter({ text: `💰 Saldo sekarang: ${newBalance.toLocaleString()} credits` });
-  
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("back_to_casino").setLabel("🎰 Kembali ke Casino").setStyle(ButtonStyle.Secondary)
-  );
-  
-  return interaction.editReply({ embeds: [embed], components: [row] });
-}
-
-module.exports = { executeCF };
+module.exports = {
+    name: 'cf',
+    description: 'Coin Flip game',
+    
+    async executePrefix(message, args, client) {
+        // Validasi channel
+        if (!channelValidator.validateCasinoChannel(message.channelId)) {
+            return message.reply(`❌ Game CF hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
+        }
+        
+        if (args.length < 2) {
+            return message.reply('❌ Usage: !cf <kepala/ekor> <amount>');
+        }
+        
+        const choice = args[0].toLowerCase();
+        if (choice !== 'kepala' && choice !== 'ekor') {
+            return message.reply('❌ Pilihan harus "kepala" atau "ekor"!');
+        }
+        
+        const bet = parseInt(args[1]);
+        if (isNaN(bet) || bet <= 0) {
+            return message.reply('❌ Taruhan harus berupa angka positif!');
+        }
+        
+        const userId = message.author.id;
+        const balance = await economy.getBalance(userId);
+        
+        if (balance < bet) {
+            return message.reply(`❌ Saldo tidak cukup! Kamu punya ${balance} credits`);
+        }
+        
+        const winChance = Math.random() < 0.3; // 30% win chance
+        const result = Math.random() < 0.5 ? 'kepala' : 'ekor';
+        const isWin = winChance && choice === result;
+        const winAmount = isWin ? bet * 2 : 0;
+        
+        if (isWin) {
+            await economy.addCredits(userId, winAmount - bet);
+        } else {
+            await economy.removeCredits(userId, bet);
+        }
+        
+        const embed = new EmbedBuilder()
+            .setColor(isWin ? '#00ff00' : '#ff0000')
+            .setTitle('🪙 COIN FLIP 🪙')
+            .addFields(
+                { name: 'Pilihanmu', value: choice.toUpperCase(), inline: true },
+                { name: 'Hasil', value: result.toUpperCase(), inline: true },
+                { name: 'Status', value: isWin ? '✅ MENANG!' : '❌ KALAH!', inline: true },
+                { name: 'Taruhan', value: `${bet} credits`, inline: true },
+                { name: 'Hasil Akhir', value: isWin ? `+${winAmount} credits` : `-${bet} credits`, inline: true }
+            )
+            .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
+        
+        await message.reply({ embeds: [embed] });
+    }
+};

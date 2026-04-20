@@ -1,87 +1,76 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const economy = require("../utils/economy");
+const { EmbedBuilder } = require('discord.js');
+const economy = require('../utils/economy');
+const channelValidator = require('../utils/channelValidator');
 
-const SLOTS_EMOJIS = ["🍒", "🍋", "🍊", "🍉", "🎰", "💎", "🍇", "🔔", "🍓", "🥝"];
-const SLOTS_MULTIPLIERS = {
-  "🍒": { pair: 1.5, triple: 3 },
-  "🍋": { pair: 1.5, triple: 3 },
-  "🍊": { pair: 1.5, triple: 3.5 },
-  "🍉": { pair: 1.5, triple: 4 },
-  "🎰": { pair: 2, triple: 15 },
-  "💎": { pair: 2, triple: 10 },
-  "🍇": { pair: 1.5, triple: 3.5 },
-  "🔔": { pair: 1.5, triple: 4 },
-  "🍓": { pair: 1.5, triple: 3 },
-  "🥝": { pair: 1.5, triple: 3 }
+const symbols = ['🍒', '🍋', '🍊', '🍉', '🎰', '💎', '🍇', '🔔', '🍓', '🥝'];
+const multipliers = {
+    '🍒': 3, '🍋': 3, '🍊': 3, '🍉': 4, '🎰': 15,
+    '💎': 10, '🍇': 3, '🔔': 5, '🍓': 3, '🥝': 3
 };
 
-async function executeSlots(interaction, amount, client) {
-  await interaction.deferReply({ flags: 64 });
-  
-  const balance = await economy.getBalance(interaction.user.id);
-  
-  if (amount < 10) {
-    return interaction.editReply({ content: "❌ Minimal taruhan adalah **10 credits**!" });
-  }
-  
-  if (balance < amount) {
-    return interaction.editReply({ content: `❌ Credit tidak cukup! Saldo: **${balance.toLocaleString()}** credits` });
-  }
-  
-  const slot1 = SLOTS_EMOJIS[Math.floor(Math.random() * SLOTS_EMOJIS.length)];
-  const slot2 = SLOTS_EMOJIS[Math.floor(Math.random() * SLOTS_EMOJIS.length)];
-  const slot3 = SLOTS_EMOJIS[Math.floor(Math.random() * SLOTS_EMOJIS.length)];
-  
-  let multiplier = 0;
-  let resultText = "";
-  
-  if (slot1 === slot2 && slot2 === slot3) {
-    multiplier = SLOTS_MULTIPLIERS[slot1].triple;
-    resultText = `🎉 **JACKPOT!** ${slot1}${slot2}${slot3} - x${multiplier}! 🎉`;
-  } else if (slot1 === slot2 || slot2 === slot3 || slot1 === slot3) {
-    multiplier = SLOTS_MULTIPLIERS[slot1].pair;
-    resultText = `✨ **PAIR!** ${slot1}${slot2}${slot3} - x${multiplier}! ✨`;
-  } else {
-    multiplier = 0;
-    resultText = `💔 **KALAH!** ${slot1}${slot2}${slot3} - Tidak ada yang cocok.`;
-  }
-  
-  let winAmount = 0;
-  let embedColor = 0xff0000;
-  
-  if (multiplier > 0) {
-    winAmount = Math.floor(amount * multiplier);
-    await economy.addCredits(interaction.user.id, winAmount);
-    embedColor = 0x00ff00;
-  } else {
-    await economy.removeCredits(interaction.user.id, amount);
-    embedColor = 0xff0000;
-  }
-  
-  const embed = new EmbedBuilder()
-    .setTitle("🎰 **SLOT MACHINE** 🎰")
-    .setColor(embedColor)
-    .setDescription(`\`\`\`\n┌─────┬─────┬─────┐\n│ ${slot1} │ ${slot2}  │ ${slot3} │\n└─────┴─────┴─────┘\n\`\`\``)
-    .addFields(
-      { name: "📊 **Hasil**", value: resultText, inline: false },
-      { name: "💰 **Taruhan**", value: `${amount.toLocaleString()} credits`, inline: true }
-    )
-    .setTimestamp();
-  
-  if (multiplier > 0) {
-    embed.addFields({ name: "🎁 **Kemenangan**", value: `+${winAmount.toLocaleString()} credits (x${multiplier})`, inline: true });
-  } else {
-    embed.addFields({ name: "💸 **Kekalahan**", value: `-${amount.toLocaleString()} credits`, inline: true });
-  }
-  
-  const newBalance = await economy.getBalance(interaction.user.id);
-  embed.setFooter({ text: `💰 Saldo sekarang: ${newBalance.toLocaleString()} credits` });
-  
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("back_to_casino").setLabel("🎰 Kembali ke Casino").setStyle(ButtonStyle.Secondary)
-  );
-  
-  return interaction.editReply({ embeds: [embed], components: [row] });
-}
-
-module.exports = { executeSlots };
+module.exports = {
+    name: 'slots',
+    description: 'Slot machine game',
+    
+    async executePrefix(message, args, client) {
+        // Validasi channel
+        if (!channelValidator.validateCasinoChannel(message.channelId)) {
+            return message.reply(`❌ Game Slots hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
+        }
+        
+        if (args.length < 1) {
+            return message.reply('❌ Usage: !slots <amount>');
+        }
+        
+        const bet = parseInt(args[0]);
+        if (isNaN(bet) || bet <= 0) {
+            return message.reply('❌ Taruhan harus berupa angka positif!');
+        }
+        
+        const userId = message.author.id;
+        const balance = await economy.getBalance(userId);
+        
+        if (balance < bet) {
+            return message.reply(`❌ Saldo tidak cukup! Kamu punya ${balance} credits`);
+        }
+        
+        const slot1 = symbols[Math.floor(Math.random() * symbols.length)];
+        const slot2 = symbols[Math.floor(Math.random() * symbols.length)];
+        const slot3 = symbols[Math.floor(Math.random() * symbols.length)];
+        
+        let multiplier = 0;
+        let result = '';
+        
+        if (slot1 === slot2 && slot2 === slot3) {
+            multiplier = multipliers[slot1];
+            result = `JACKPOT! ${multiplier}x`;
+        } else if (slot1 === slot2 || slot2 === slot3 || slot1 === slot3) {
+            multiplier = 1.5;
+            result = 'PAIR! 1.5x';
+        } else {
+            multiplier = 0;
+            result = 'KALAH! 0x';
+        }
+        
+        const winAmount = Math.floor(bet * multiplier);
+        
+        if (winAmount > 0) {
+            await economy.addCredits(userId, winAmount - bet);
+        } else {
+            await economy.removeCredits(userId, bet);
+        }
+        
+        const embed = new EmbedBuilder()
+            .setColor(winAmount > 0 ? '#00ff00' : '#ff0000')
+            .setTitle('🎰 SLOT MACHINE 🎰')
+            .setDescription(`╔═══╗\n║ ${slot1} ║\n║ ${slot2} ║\n║ ${slot3} ║\n╚═══╝`)
+            .addFields(
+                { name: 'Hasil', value: result, inline: true },
+                { name: 'Taruhan', value: `${bet} credits`, inline: true },
+                { name: 'Kemenangan', value: winAmount > 0 ? `+${winAmount} credits` : `-${bet} credits`, inline: true }
+            )
+            .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
+        
+        await message.reply({ embeds: [embed] });
+    }
+};
