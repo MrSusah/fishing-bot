@@ -4,6 +4,7 @@ const { User } = require("../database/mongo");
 module.exports = {
     name: "activity",
     description: "Lihat aktivitas dan points",
+    aliases: ["act", "aktivitas"],
     
     async execute(message, args, client) {
         let targetUser = message.author;

@@ -4,30 +4,19 @@ const { User } = require("../database/mongo");
 module.exports = {
     name: "activitylb",
     description: "Leaderboard aktivitas dan points",
-    aliases: ["al", "activelb"],
+    aliases: ["al", "activelb", "leaderboard"],
     
     async execute(message, args, client) {
         await message.channel.sendTyping();
         
         // Top Points
-        const topPoints = await User.find()
-            .sort({ points: -1 })
-            .limit(10);
-        
-        // Top Activity Points
-        const topActivity = await User.find()
-            .sort({ activityPoints: -1 })
-            .limit(10);
-        
-        // Top Season Points
-        const topSeason = await User.find()
-            .sort({ seasonPoints: -1 })
-            .limit(10);
-        
-        // Top Fishing Credits
-        const topFishing = await User.find()
-            .sort({ totalFishingCredits: -1 })
-            .limit(10);
+        const topPoints = await User.find().sort({ points: -1 }).limit(10);
+        // Top Activity
+        const topActivity = await User.find().sort({ activityPoints: -1 }).limit(10);
+        // Top Season
+        const topSeason = await User.find().sort({ seasonPoints: -1 }).limit(10);
+        // Top Fishing
+        const topFishing = await User.find().sort({ totalFishingCredits: -1 }).limit(10);
         
         let pointsText = "";
         for (let i = 0; i < topPoints.length; i++) {

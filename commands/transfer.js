@@ -21,23 +21,10 @@ module.exports = {
             return message.reply("❌ Tidak bisa transfer ke diri sendiri!");
         }
         
-        // Lock untuk mencegah double transfer (sederhana)
-        const processingLocks = new Map();
-        const lockKey = `${message.author.id}:transfer`;
-        
-        if (processingLocks.has(lockKey)) {
-            return message.reply("⏳ Proses transfer sedang berjalan, tunggu sebentar!");
-        }
-        
-        processingLocks.set(lockKey, Date.now());
-        setTimeout(() => processingLocks.delete(lockKey), 5000);
-        
         try {
             const sender = await User.findOne({ userId: message.author.id });
-            const receiver = await User.findOne({ userId: target.id });
             
             if (!sender || sender.credits < amount) {
-                processingLocks.delete(lockKey);
                 return message.reply(`❌ Credit tidak cukup! Saldo: ${sender?.credits?.toLocaleString() || 0} credits`);
             }
             
@@ -63,12 +50,10 @@ module.exports = {
                 )
                 .setTimestamp();
             
-            processingLocks.delete(lockKey);
             return message.reply({ embeds: [embed] });
             
         } catch (error) {
             console.error("Transfer error:", error);
-            processingLocks.delete(lockKey);
             return message.reply("❌ Terjadi kesalahan saat transfer!");
         }
     }
