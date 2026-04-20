@@ -35,9 +35,12 @@ if (fs.existsSync(commandsPath)) {
     
     for (const file of commandFiles) {
         const command = require(`./commands/${file}`);
-        if (command.name && command.execute) {
+        // Perhatikan: gunakan executePrefix, bukan execute
+        if (command.name && command.executePrefix) {
             client.prefixCommands.set(command.name, command);
             console.log(`✅ Loaded prefix command: ${command.name}`);
+        } else {
+            console.log(`⚠️ Command ${file} tidak memiliki executePrefix`);
         }
     }
 }
@@ -356,13 +359,27 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Message handler for prefix commands and games
+// Message handler for prefix commands
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
+    if (!message.content.startsWith(PREFIX)) return;
     
-    const handled = await gameHandler.handleMessage(message, client);
-    if (!handled) {
-        // Optional: handle non-game messages here
+    const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+    const commandName = args.shift().toLowerCase();
+    
+    console.log(`Command received: ${commandName} from ${message.author.username}`);
+    
+    const command = client.prefixCommands.get(commandName);
+    if (!command) {
+        console.log(`Command not found: ${commandName}`);
+        return;
+    }
+    
+    try {
+        await command.executePrefix(message, args, client);
+    } catch (error) {
+        console.error(`Error executing command ${commandName}:`, error);
+        await message.reply('❌ Terjadi kesalahan saat menjalankan command!');
     }
 });
 

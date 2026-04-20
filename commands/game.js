@@ -5,7 +5,8 @@ module.exports = {
     description: 'Menu utama game',
     
     async executePrefix(message, args, client) {
-        // Langsung kirim menu tanpa melalui gameHandler
+        console.log('!game command executed by', message.author.username);
+        
         const embed = new EmbedBuilder()
             .setColor('#00ff00')
             .setTitle('🎮 **TIANYU BOT - MAIN MENU** 🎮')
@@ -19,7 +20,7 @@ module.exports = {
                 { name: '🎁 **Reward**', value: 'Klaim reward harian/mingguan', inline: true },
                 { name: '📊 **Activity**', value: 'Lihat aktivitas dan leaderboard', inline: true }
             )
-            .setFooter({ text: 'Gunakan !command untuk perintah cepat | Semua game menggunakan credits' })
+            .setFooter({ text: 'Gunakan !command untuk perintah cepat' })
             .setTimestamp();
 
         const row1 = new ActionRowBuilder()

@@ -5,18 +5,20 @@ module.exports = {
     description: 'Menu utama casino',
     
     async executePrefix(message, args, client) {
+        console.log('!casino command executed by', message.author.username);
+        
         const embed = new EmbedBuilder()
             .setColor('#ffd700')
             .setTitle('🎰 CASINO ROYALE 🎰')
             .setDescription('Pilih permainan casino di bawah ini!')
             .addFields(
-                { name: '🪙 Coin Flip', value: 'Tebak kepala/ekor - 30% win chance (x2)', inline: true },
-                { name: '✊ RPS', value: 'Rock Paper Scissors - Menang dapat x2', inline: true },
-                { name: '🎰 Slots', value: 'Slot machine - Jackpot hingga x15', inline: true },
-                { name: '🎡 Roulette', value: 'Tebak warna/nomor - x2 sampai x36', inline: true },
-                { name: '🎲 Dice', value: 'Tebak High/Low - x2', inline: true }
+                { name: '🪙 Coin Flip', value: '`!cf kepala 100` atau `!cf ekor 100`', inline: true },
+                { name: '✊ RPS', value: '`!rps rock 100` / `!rps paper 100` / `!rps scissors 100`', inline: true },
+                { name: '🎰 Slots', value: '`!slots 100`', inline: true },
+                { name: '🎡 Roulette', value: '`!roulette 100 red` / `!roulette 100 black` / `!roulette 100 7`', inline: true },
+                { name: '🎲 Dice', value: '`!dadu high 100` atau `!dadu low 100`', inline: true }
             )
-            .setFooter({ text: 'Semua game menggunakan credits | Gunakan !points untuk cek saldo' });
+            .setFooter({ text: 'Semua game menggunakan credits | Cek saldo dengan !points' });
 
         const row1 = new ActionRowBuilder()
             .addComponents(
