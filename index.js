@@ -166,6 +166,7 @@ client.once('ready', async () => {
 });
 
 // Interaction handler
+// Cari bagian interaction handler dan update handleButton
 client.on('interactionCreate', async interaction => {
     // Handle modal submit
     if (interaction.isModalSubmit()) {
@@ -178,6 +179,153 @@ client.on('interactionCreate', async interaction => {
     
     // Handle buttons
     if (interaction.isButton()) {
+        // Cek apakah button dari menu utama (fishing, hunt, casino, profile, reward, activity)
+        const customId = interaction.customId;
+        
+        // Menu utama buttons
+        if (customId === "menu_fishing") {
+            const fishingModule = client.games.get('fishing');
+            if (fishingModule && fishingModule.showFishingMenu) {
+                await fishingModule.showFishingMenu(interaction);
+            } else {
+                await interaction.reply({ content: "❌ Modul fishing tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "menu_hunt") {
+            const huntModule = client.games.get('hunt');
+            if (huntModule && huntModule.showGameMenu) {
+                await huntModule.showGameMenu(interaction);
+            } else {
+                await interaction.reply({ content: "❌ Modul hunt tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "menu_casino") {
+            const casinoCommand = client.prefixCommands.get('casino');
+            if (casinoCommand) {
+                // Buat fake message untuk executePrefix
+                const fakeMessage = {
+                    channelId: interaction.channel.id,
+                    author: interaction.user,
+                    member: interaction.member,
+                    channel: interaction.channel,
+                    guild: interaction.guild,
+                    reply: async (options) => {
+                        if (options.embeds) {
+                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
+                        } else {
+                            await interaction.reply(options);
+                        }
+                    }
+                };
+                await casinoCommand.executePrefix(fakeMessage, [], client);
+            } else {
+                await interaction.reply({ content: "❌ Modul casino tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "menu_profile") {
+            const profileCommand = client.prefixCommands.get('profile');
+            if (profileCommand) {
+                const fakeMessage = {
+                    channelId: interaction.channel.id,
+                    author: interaction.user,
+                    member: interaction.member,
+                    channel: interaction.channel,
+                    guild: interaction.guild,
+                    mentions: { users: { first: () => null } },
+                    reply: async (options) => {
+                        if (options.embeds) {
+                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
+                        } else {
+                            await interaction.reply(options);
+                        }
+                    }
+                };
+                await profileCommand.executePrefix(fakeMessage, [], client);
+            } else {
+                await interaction.reply({ content: "❌ Modul profile tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "menu_reward") {
+            const rewardCommand = client.prefixCommands.get('reward');
+            if (rewardCommand) {
+                const fakeMessage = {
+                    channelId: interaction.channel.id,
+                    author: interaction.user,
+                    member: interaction.member,
+                    channel: interaction.channel,
+                    guild: interaction.guild,
+                    reply: async (options) => {
+                        if (options.embeds) {
+                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
+                        } else {
+                            await interaction.reply(options);
+                        }
+                    }
+                };
+                await rewardCommand.executePrefix(fakeMessage, [], client);
+            } else {
+                await interaction.reply({ content: "❌ Modul reward tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "menu_activity") {
+            const activityCommand = client.prefixCommands.get('activity');
+            if (activityCommand) {
+                const fakeMessage = {
+                    channelId: interaction.channel.id,
+                    author: interaction.user,
+                    member: interaction.member,
+                    channel: interaction.channel,
+                    guild: interaction.guild,
+                    reply: async (options) => {
+                        if (options.embeds) {
+                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
+                        } else {
+                            await interaction.reply(options);
+                        }
+                    }
+                };
+                await activityCommand.executePrefix(fakeMessage, [], client);
+            } else {
+                await interaction.reply({ content: "❌ Modul activity tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "back_to_main_menu") {
+            const gameCommand = client.prefixCommands.get('game');
+            if (gameCommand) {
+                const fakeMessage = {
+                    channelId: interaction.channel.id,
+                    author: interaction.user,
+                    member: interaction.member,
+                    channel: interaction.channel,
+                    guild: interaction.guild,
+                    reply: async (options) => {
+                        if (options.embeds) {
+                            await interaction.update({ embeds: options.embeds, components: options.components });
+                        } else {
+                            await interaction.update(options);
+                        }
+                    }
+                };
+                await gameCommand.executePrefix(fakeMessage, [], client);
+            } else {
+                await interaction.reply({ content: "❌ Kembali ke menu utama", flags: 64 });
+            }
+            return;
+        }
+        
+        // Cek di game modules untuk button lain (fishing, hunt, dll)
         const handled = await gameHandler.handleButton(interaction, client);
         if (!handled) {
             console.log(`⚠️ Unhandled button: ${interaction.customId}`);
