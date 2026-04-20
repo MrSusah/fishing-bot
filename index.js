@@ -64,14 +64,31 @@ if (fs.existsSync(gamesPath)) {
 }
 
 // Utility function to handle game interactions
+// Import game handler from utils
+const gameHandlerUtil = require('./utils/gameHandler');
+
+// Set game modules
+const gameModules = {};
+for (const [name, game] of client.games) {
+    gameModules[name] = game;
+}
+gameHandlerUtil.setGameModules(gameModules);
+
+// Utility function to handle game interactions
 const gameHandler = {
     async handleButton(interaction, client) {
+        // Cek di game modules dulu
         for (const [name, game] of client.games) {
             if (game.handleButton && typeof game.handleButton === 'function') {
                 const handled = await game.handleButton(interaction, client);
                 if (handled) return true;
             }
         }
+        
+        // Cek di main game handler
+        const handled = await gameHandlerUtil.handleGameButton(interaction, client);
+        if (handled) return true;
+        
         return false;
     },
     
@@ -85,10 +102,18 @@ const gameHandler = {
         return false;
     },
     
+    async handleModalSubmit(interaction, client) {
+        for (const [name, game] of client.games) {
+            if (game.handleModalSubmit && typeof game.handleModalSubmit === 'function') {
+                const handled = await game.handleModalSubmit(interaction, client);
+                if (handled) return true;
+            }
+        }
+        return false;
+    },
+    
     async handleMessage(message, client) {
-        // Cek apakah ini prefix command
         if (!message.content.startsWith(PREFIX)) {
-            // Jika bukan command, cek untuk aktivitas chat
             await activityHandler.handleChatActivity(message);
             await activityHandler.handleGalleryActivity(message);
             return false;
@@ -97,10 +122,8 @@ const gameHandler = {
         const args = message.content.slice(PREFIX.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
         
-        // Track command activity
         await activityHandler.handleCommandActivity(message.author.id, commandName);
         
-        // Cek di prefix commands dulu
         const prefixCommand = client.prefixCommands.get(commandName);
         if (prefixCommand) {
             try {
@@ -112,20 +135,9 @@ const gameHandler = {
             return true;
         }
         
-        // Cek di games
         for (const [name, game] of client.games) {
             if (game.handleMessage && typeof game.handleMessage === 'function') {
                 const handled = await game.handleMessage(message, client);
-                if (handled) return true;
-            }
-        }
-        return false;
-    },
-    
-    async handleModalSubmit(interaction, client) {
-        for (const [name, game] of client.games) {
-            if (game.handleModalSubmit && typeof game.handleModalSubmit === 'function') {
-                const handled = await game.handleModalSubmit(interaction, client);
                 if (handled) return true;
             }
         }

@@ -110,7 +110,7 @@ const gameModule = {
         Legendary: 1 / 100000
     },
     
-    // Fishing zones (tetap sama seperti sebelumnya)
+    // Fishing zones
     fishingZones: {
         "1492058905499402271": [
             { name: "Lele Lumpur", rarity: "Common", value: 5 }, { name: "Gabus", rarity: "Common", value: 6 },
@@ -1074,6 +1074,44 @@ const gameModule = {
         }
         
         return false;
+    },
+
+    // ==================== SHOW FISHING MENU (TAMBAHKAN INI) ====================
+    async showFishingMenu(interaction) {
+        const row1 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("menu_fish").setLabel("🎣 Fishing").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId("menu_index").setLabel("📖 Index").setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId("menu_convert").setLabel("🔄 Convert").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId("menu_shop").setLabel("🛒 Shop").setStyle(ButtonStyle.Success)
+        );
+
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("menu_inventory").setLabel("🎒 Inventory").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("menu_sell").setLabel("💰 Sell Fish").setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId("menu_redeem").setLabel("🎁 Hadiah").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId("menu_transfer").setLabel("💸 Transfer").setStyle(ButtonStyle.Danger)
+        );
+
+        const row3 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("menu_activity").setLabel("📊 Aktivitas").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("menu_leaderboard").setLabel("🏆 Fishing LB").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId("menu_points_leaderboard").setLabel("⭐ Points LB").setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
+        );
+
+        const components = [row1, row2, row3];
+        
+        if (interaction.deferred || interaction.replied) {
+            return interaction.editReply({
+                content: "🎮 **FISHING BOT**\n💡 100 credits = 1 point | Gunakan !profile untuk lihat profil",
+                components: components
+            });
+        }
+        return interaction.reply({
+            content: "🎮 **FISHING BOT**\n💡 100 credits = 1 point | Gunakan !profile untuk lihat profil",
+            components: components,
+            flags: 64
+        });
     }
 };
 
