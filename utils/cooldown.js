@@ -48,31 +48,6 @@ async function setCooldown(userId, command) {
     }
 }
 
-async function getDailyReward(userId) {
-    const reward = Math.floor(Math.random() * 51) + 50; // 50-100
-    return reward;
-}
-
-async function getHourlyReward(userId) {
-    const reward = Math.floor(Math.random() * 41) + 10; // 10-50
-    return reward;
-}
-
-async function getWeeklyReward(userId) {
-    const reward = Math.floor(Math.random() * 301) + 200; // 200-500
-    return reward;
-}
-
-async function getMonthlyReward(userId) {
-    const reward = Math.floor(Math.random() * 1001) + 1000; // 1000-2000
-    return reward;
-}
-
-async function getYearlyReward(userId) {
-    const reward = Math.floor(Math.random() * 2001) + 3000; // 3000-5000
-    return reward;
-}
-
 async function resetCooldown(userId, command = null) {
     try {
         if (command) {
@@ -90,11 +65,6 @@ async function resetCooldown(userId, command = null) {
 module.exports = {
     checkCooldown,
     setCooldown,
-    getDailyReward,
-    getHourlyReward,
-    getWeeklyReward,
-    getMonthlyReward,
-    getYearlyReward,
     resetCooldown,
     formatTime
 };

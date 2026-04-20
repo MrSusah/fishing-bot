@@ -14,16 +14,12 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor('#ff0000')
                 .setTitle('❌ Channel Tidak Valid')
-                .setDescription(`Game hunt hanya bisa dimainkan di channel <#${channelValidator.HUNT_CHANNEL_ID}>!`)
-                .setFooter({ text: "Kembali ke menu utama untuk memilih game lain" });
+                .setDescription(`Game hunt hanya bisa dimainkan di channel <#${channelValidator.HUNT_CHANNEL_ID}>!`);
             
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Kembali ke Menu Utama").setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
             );
             
-            if (interaction.deferred || interaction.replied) {
-                return interaction.editReply({ embeds: [embed], components: [row] });
-            }
             return interaction.reply({ embeds: [embed], components: [row], flags: 64 });
         }
         
@@ -35,17 +31,13 @@ module.exports = {
                 { name: '💰 Reward', value: '50-200 credits', inline: true },
                 { name: '🎯 Win Chance', value: '60%', inline: true },
                 { name: '⏰ Cooldown', value: '1 jam', inline: true }
-            )
-            .setFooter({ text: 'Klik tombol di bawah untuk berburu!' });
+            );
         
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId("play_hunt").setLabel("🏹 Mulai Hunt").setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId("back_to_main_menu").setLabel("🔙 Kembali").setStyle(ButtonStyle.Secondary)
         );
         
-        if (interaction.deferred || interaction.replied) {
-            return interaction.editReply({ embeds: [embed], components: [row] });
-        }
         return interaction.reply({ embeds: [embed], components: [row], flags: 64 });
     },
     
@@ -103,21 +95,12 @@ module.exports = {
         }
     },
     
-    async handleButton(interaction, client) {
-        if (interaction.customId === "play_hunt") {
-            await this.executeGame(interaction);
-            return true;
-        }
-        return false;
-    },
-    
     async executePrefix(message, args, client) {
         if (!channelValidator.validateHuntChannel(message.channelId)) {
             return message.reply(`❌ Game hunt hanya bisa dimainkan di channel <#${channelValidator.HUNT_CHANNEL_ID}>!`);
         }
         
         const userId = message.author.id;
-        const username = message.author.username;
         
         const cdCheck = await cooldown.checkCooldown(userId, 'hunt', 3600000);
         if (!cdCheck.allowed) {
@@ -131,24 +114,10 @@ module.exports = {
         if (winChance && reward > 0) {
             await economy.addCredits(userId, reward);
             await cooldown.setCooldown(userId, 'hunt');
-            
-            const embed = new EmbedBuilder()
-                .setColor('#00ff00')
-                .setTitle('🏹 PERBURUAN BERHASIL! 🏹')
-                .setDescription(`Kamu berburu **${animal}**... 🏹\n\n✨ **BERHASIL!** ✨\n+${reward} credits`)
-                .setFooter({ text: username, iconURL: message.author.displayAvatarURL() });
-            
-            await message.reply({ embeds: [embed] });
+            return message.reply(`🏹 **BERHASIL!** Kamu berburu ${animal} dan mendapat ${reward} credits!`);
         } else {
             await cooldown.setCooldown(userId, 'hunt');
-            
-            const embed = new EmbedBuilder()
-                .setColor('#ff0000')
-                .setTitle('😔 PERBURUAN GAGAL 😔')
-                .setDescription(`Kamu berburu **${animal}**... 🏹\n\n💔 **GAGAL!** 💔\n+0 credits`)
-                .setFooter({ text: username, iconURL: message.author.displayAvatarURL() });
-            
-            await message.reply({ embeds: [embed] });
+            return message.reply(`😔 **GAGAL!** Kamu berburu ${animal} tetapi gagal mendapat apa-apa.`);
         }
     }
 };

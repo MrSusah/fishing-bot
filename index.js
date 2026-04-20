@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
@@ -14,8 +14,8 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildPresences,  // Tambahan untuk presence tracking
-        GatewayIntentBits.GuildMembers      // Tambahan untuk member tracking
+        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildMembers
     ]
 });
 
@@ -25,22 +25,17 @@ client.cooldowns = new Collection();
 client.games = new Collection();
 client.prefixCommands = new Collection();
 
-// Prefix untuk command
 const PREFIX = '!';
 
-// Load prefix commands dari folder commands
+// Load prefix commands
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-    
     for (const file of commandFiles) {
         const command = require(`./commands/${file}`);
-        // Perhatikan: gunakan executePrefix, bukan execute
         if (command.name && command.executePrefix) {
             client.prefixCommands.set(command.name, command);
-            console.log(`✅ Loaded prefix command: ${command.name}`);
-        } else {
-            console.log(`⚠️ Command ${file} tidak memiliki executePrefix`);
+            console.log(`✅ Loaded command: ${command.name}`);
         }
     }
 }
@@ -49,104 +44,20 @@ if (fs.existsSync(commandsPath)) {
 const gamesPath = path.join(__dirname, 'games');
 if (fs.existsSync(gamesPath)) {
     const gameFiles = fs.readdirSync(gamesPath).filter(file => file.endsWith('.js'));
-    
     for (const file of gameFiles) {
         const game = require(`./games/${file}`);
         if (game.name) {
             client.games.set(game.name, game);
             console.log(`🎮 Loaded game: ${game.name}`);
-            
             if (game.init && typeof game.init === 'function') {
                 game.init(client);
             }
         }
     }
-} else {
-    console.log('📁 Folder games tidak ditemukan, buat folder games untuk menambahkan game modules');
-    fs.mkdirSync(gamesPath, { recursive: true });
 }
 
-// Utility function to handle game interactions
-// Import game handler from utils
-const gameHandlerUtil = require('./utils/gameHandler');
-
-// Set game modules
-const gameModules = {};
-for (const [name, game] of client.games) {
-    gameModules[name] = game;
-}
-gameHandlerUtil.setGameModules(gameModules);
-
-// Utility function to handle game interactions
-const gameHandler = {
-    async handleButton(interaction, client) {
-        // Cek di game modules dulu
-        for (const [name, game] of client.games) {
-            if (game.handleButton && typeof game.handleButton === 'function') {
-                const handled = await game.handleButton(interaction, client);
-                if (handled) return true;
-            }
-        }
-        
-        // Cek di main game handler
-        const handled = await gameHandlerUtil.handleGameButton(interaction, client);
-        if (handled) return true;
-        
-        return false;
-    },
-    
-    async handleSelectMenu(interaction, client) {
-        for (const [name, game] of client.games) {
-            if (game.handleSelectMenu && typeof game.handleSelectMenu === 'function') {
-                const handled = await game.handleSelectMenu(interaction, client);
-                if (handled) return true;
-            }
-        }
-        return false;
-    },
-    
-    async handleModalSubmit(interaction, client) {
-        for (const [name, game] of client.games) {
-            if (game.handleModalSubmit && typeof game.handleModalSubmit === 'function') {
-                const handled = await game.handleModalSubmit(interaction, client);
-                if (handled) return true;
-            }
-        }
-        return false;
-    },
-    
-    async handleMessage(message, client) {
-        if (!message.content.startsWith(PREFIX)) {
-            await activityHandler.handleChatActivity(message);
-            await activityHandler.handleGalleryActivity(message);
-            return false;
-        }
-        
-        const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-        const commandName = args.shift().toLowerCase();
-        
-        await activityHandler.handleCommandActivity(message.author.id, commandName);
-        
-        const prefixCommand = client.prefixCommands.get(commandName);
-        if (prefixCommand) {
-            try {
-                await prefixCommand.execute(message, args, client);
-            } catch (error) {
-                console.error(error);
-                await message.reply('❌ Terjadi kesalahan saat menjalankan command!');
-            }
-            return true;
-        }
-        
-        for (const [name, game] of client.games) {
-            if (game.handleMessage && typeof game.handleMessage === 'function') {
-                const handled = await game.handleMessage(message, client);
-                if (handled) return true;
-            }
-        }
-        return false;
-    }
-};
+// Leaderboard Scheduler
+const leaderboardScheduler = require('./handlers/leaderboardScheduler');
 
 // Ready event
 client.once('ready', async () => {
@@ -154,38 +65,34 @@ client.once('ready', async () => {
     console.log(`📊 Bot sedang berjalan di ${client.guilds.cache.size} server`);
     console.log(`🎮 Prefix command: ${PREFIX}`);
     
-    // Start voice points checker
     activityHandler.startVoicePointsChecker(client);
     
-    // Trigger ready event for all games
     for (const [name, game] of client.games) {
         if (game.onReady && typeof game.onReady === 'function') {
             await game.onReady(client);
         }
     }
     
-    // Optional: Set season reset setiap bulan
-    // activityHandler.resetSeasonPoints();
+    // Start leaderboard scheduler
+    leaderboardScheduler.startLeaderboardScheduler(client);
 });
 
-// Interaction handler
-// Cari bagian interaction handler dan update handleButton
+// Button Handler
 client.on('interactionCreate', async interaction => {
-    // Handle modal submit
     if (interaction.isModalSubmit()) {
-        const handled = await gameHandler.handleModalSubmit(interaction, client);
-        if (!handled) {
-            console.log(`⚠️ Unhandled modal: ${interaction.customId}`);
+        for (const [name, game] of client.games) {
+            if (game.handleModalSubmit && typeof game.handleModalSubmit === 'function') {
+                const handled = await game.handleModalSubmit(interaction, client);
+                if (handled) return;
+            }
         }
         return;
     }
     
-    // Handle buttons
     if (interaction.isButton()) {
-        // Cek apakah button dari menu utama (fishing, hunt, casino, profile, reward, activity)
         const customId = interaction.customId;
         
-        // Menu utama buttons
+        // Menu Utama - Fishing
         if (customId === "menu_fishing") {
             const fishingModule = client.games.get('fishing');
             if (fishingModule && fishingModule.showFishingMenu) {
@@ -196,156 +103,268 @@ client.on('interactionCreate', async interaction => {
             return;
         }
         
+        // Menu Utama - Hunt
         if (customId === "menu_hunt") {
-            const huntModule = client.games.get('hunt');
-            if (huntModule && huntModule.showGameMenu) {
-                await huntModule.showGameMenu(interaction);
-            } else {
-                await interaction.reply({ content: "❌ Modul hunt tidak tersedia!", flags: 64 });
-            }
+            await interaction.reply({ 
+                content: "🏹 **HUNT**\n\nGunakan command `!hunt` untuk berburu hewan!\n\n💰 Reward: 50-200 credits\n🎯 Win Chance: 60%\n⏰ Cooldown: 1 jam\n\n📍 Channel khusus: <#1495049686363410535>",
+                flags: 64 
+            });
             return;
         }
         
+        // Menu Utama - Dungeon
+        if (customId === "menu_dungeon") {
+            await interaction.reply({ 
+                content: "🏰 **DUNGEON**\n\nGunakan command `!dungeon` untuk menjelajahi dungeon!\n\n💰 Reward: 200-1000 credits\n🎯 Win Chance: 40%\n⏰ Cooldown: 2 jam\n\n📍 Channel khusus: <#1495049686363410535>",
+                flags: 64 
+            });
+            return;
+        }
+        
+        // Menu Utama - Casino
         if (customId === "menu_casino") {
-            const casinoCommand = client.prefixCommands.get('casino');
-            if (casinoCommand) {
-                // Buat fake message untuk executePrefix
+            const casinoCmd = client.prefixCommands.get('casino');
+            if (casinoCmd) {
                 const fakeMessage = {
                     channelId: interaction.channel.id,
                     author: interaction.user,
-                    member: interaction.member,
                     channel: interaction.channel,
-                    guild: interaction.guild,
                     reply: async (options) => {
-                        if (options.embeds) {
-                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
-                        } else {
-                            await interaction.reply(options);
-                        }
+                        await interaction.reply({ ...options, flags: 64 });
                     }
                 };
-                await casinoCommand.executePrefix(fakeMessage, [], client);
-            } else {
-                await interaction.reply({ content: "❌ Modul casino tidak tersedia!", flags: 64 });
+                await casinoCmd.executePrefix(fakeMessage, [], client);
             }
             return;
         }
         
+        // Menu Utama - Profile
         if (customId === "menu_profile") {
-            const profileCommand = client.prefixCommands.get('profile');
-            if (profileCommand) {
+            const profileCmd = client.prefixCommands.get('profile');
+            if (profileCmd) {
                 const fakeMessage = {
-                    channelId: interaction.channel.id,
                     author: interaction.user,
-                    member: interaction.member,
                     channel: interaction.channel,
-                    guild: interaction.guild,
-                    mentions: { users: { first: () => null } },
                     reply: async (options) => {
-                        if (options.embeds) {
-                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
-                        } else {
-                            await interaction.reply(options);
-                        }
+                        await interaction.reply({ ...options, flags: 64 });
                     }
                 };
-                await profileCommand.executePrefix(fakeMessage, [], client);
-            } else {
-                await interaction.reply({ content: "❌ Modul profile tidak tersedia!", flags: 64 });
+                await profileCmd.executePrefix(fakeMessage, [], client);
             }
             return;
         }
         
+        // Menu Utama - Reward
         if (customId === "menu_reward") {
-            const rewardCommand = client.prefixCommands.get('reward');
-            if (rewardCommand) {
+            const rewardCmd = client.prefixCommands.get('reward');
+            if (rewardCmd) {
                 const fakeMessage = {
-                    channelId: interaction.channel.id,
                     author: interaction.user,
-                    member: interaction.member,
                     channel: interaction.channel,
-                    guild: interaction.guild,
                     reply: async (options) => {
-                        if (options.embeds) {
-                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
-                        } else {
-                            await interaction.reply(options);
-                        }
+                        await interaction.reply({ ...options, flags: 64 });
                     }
                 };
-                await rewardCommand.executePrefix(fakeMessage, [], client);
-            } else {
-                await interaction.reply({ content: "❌ Modul reward tidak tersedia!", flags: 64 });
+                await rewardCmd.executePrefix(fakeMessage, [], client);
             }
             return;
         }
         
+        // Menu Utama - Activity
         if (customId === "menu_activity") {
-            const activityCommand = client.prefixCommands.get('activity');
-            if (activityCommand) {
+            const activityCmd = client.prefixCommands.get('activity');
+            if (activityCmd) {
                 const fakeMessage = {
-                    channelId: interaction.channel.id,
                     author: interaction.user,
-                    member: interaction.member,
                     channel: interaction.channel,
-                    guild: interaction.guild,
                     reply: async (options) => {
-                        if (options.embeds) {
-                            await interaction.reply({ embeds: options.embeds, components: options.components, flags: 64 });
-                        } else {
-                            await interaction.reply(options);
-                        }
+                        await interaction.reply({ ...options, flags: 64 });
                     }
                 };
-                await activityCommand.executePrefix(fakeMessage, [], client);
-            } else {
-                await interaction.reply({ content: "❌ Modul activity tidak tersedia!", flags: 64 });
+                await activityCmd.executePrefix(fakeMessage, [], client);
             }
             return;
         }
         
+        // Menu Utama - Fishing Leaderboard
+        if (customId === "menu_fishing_lb") {
+            const fishingGame = client.games.get('fishing');
+            if (fishingGame && fishingGame.generateLeaderboardEmbed) {
+                await interaction.deferReply({ flags: 64 });
+                const embed = await fishingGame.generateLeaderboardEmbed(client);
+                await interaction.editReply({ embeds: [embed] });
+            } else {
+                await interaction.reply({ content: "❌ Leaderboard tidak tersedia!", flags: 64 });
+            }
+            return;
+        }
+        
+        // Menu Utama - Points Leaderboard
+        if (customId === "menu_points_lb") {
+            const { User } = require('./database/mongo');
+            const { EmbedBuilder } = require('discord.js');
+            await interaction.deferReply({ flags: 64 });
+            
+            const topUsers = await User.find().sort({ points: -1 }).limit(10);
+            let leaderboardText = "";
+            
+            for (let i = 0; i < topUsers.length; i++) {
+                const userPoint = topUsers[i];
+                let name = "Unknown";
+                try {
+                    const d = await client.users.fetch(userPoint.userId);
+                    name = d.username;
+                } catch {}
+                
+                const medal = i === 0 ? "👑" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i+1}.`;
+                leaderboardText += `${medal} **${name}** - ${userPoint.points.toLocaleString()} points\n`;
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle("⭐ POINTS LEADERBOARD")
+                .setDescription(leaderboardText || "Belum ada data")
+                .setColor(0xffd700)
+                .setFooter({ text: "💡 100 credits = 1 point" })
+                .setTimestamp();
+            
+            await interaction.editReply({ embeds: [embed] });
+            return;
+        }
+        
+        // Back to Main Menu
         if (customId === "back_to_main_menu") {
-            const gameCommand = client.prefixCommands.get('game');
-            if (gameCommand) {
+            const gameCmd = client.prefixCommands.get('game');
+            if (gameCmd) {
                 const fakeMessage = {
                     channelId: interaction.channel.id,
                     author: interaction.user,
-                    member: interaction.member,
                     channel: interaction.channel,
-                    guild: interaction.guild,
                     reply: async (options) => {
-                        if (options.embeds) {
-                            await interaction.update({ embeds: options.embeds, components: options.components });
-                        } else {
-                            await interaction.update(options);
-                        }
+                        await interaction.update(options);
                     }
                 };
-                await gameCommand.executePrefix(fakeMessage, [], client);
-            } else {
-                await interaction.reply({ content: "❌ Kembali ke menu utama", flags: 64 });
+                await gameCmd.executePrefix(fakeMessage, [], client);
             }
             return;
         }
         
-        // Cek di game modules untuk button lain (fishing, hunt, dll)
-        const handled = await gameHandler.handleButton(interaction, client);
-        if (!handled) {
-            console.log(`⚠️ Unhandled button: ${interaction.customId}`);
+        // Back to Casino
+        if (customId === "back_to_casino") {
+            const casinoCmd = client.prefixCommands.get('casino');
+            if (casinoCmd) {
+                const fakeMessage = {
+                    channelId: interaction.channel.id,
+                    author: interaction.user,
+                    channel: interaction.channel,
+                    reply: async (options) => {
+                        await interaction.update(options);
+                    }
+                };
+                await casinoCmd.executePrefix(fakeMessage, [], client);
+            }
+            return;
         }
+        
+        // Reward Buttons
+        if (customId === "reward_daily" || customId === "reward_hourly" || 
+            customId === "reward_weekly" || customId === "reward_monthly" || 
+            customId === "reward_yearly") {
+            const rewardCmd = client.prefixCommands.get('reward');
+            if (rewardCmd) {
+                let arg = "";
+                if (customId === "reward_daily") arg = "daily";
+                if (customId === "reward_hourly") arg = "hourly";
+                if (customId === "reward_weekly") arg = "weekly";
+                if (customId === "reward_monthly") arg = "monthly";
+                if (customId === "reward_yearly") arg = "yearly";
+                
+                const fakeMessage = {
+                    author: interaction.user,
+                    channel: interaction.channel,
+                    reply: async (options) => {
+                        await interaction.reply({ ...options, flags: 64 });
+                    }
+                };
+                await rewardCmd.executePrefix(fakeMessage, [arg], client);
+            }
+            return;
+        }
+        
+        // Casino Game Buttons
+        if (customId === "casino_cf") {
+            await interaction.reply({ content: "🪙 **COIN FLIP**\n\nGunakan command:\n`!cf kepala 100` atau `!cf ekor 100`\n\n🎯 Win Chance: 30%\n💰 Payout: x2", flags: 64 });
+            return;
+        }
+        if (customId === "casino_rps") {
+            await interaction.reply({ content: "✊ **ROCK PAPER SCISSORS**\n\nGunakan command:\n`!rps rock 100`\n`!rps paper 100`\n`!rps scissors 100`\n\n💰 Payout: x2", flags: 64 });
+            return;
+        }
+        if (customId === "casino_slots") {
+            await interaction.reply({ content: "🎰 **SLOT MACHINE**\n\nGunakan command:\n`!slots 100`\n\n🎰 Jackpot: x15\n🎰 Pair: x1.5", flags: 64 });
+            return;
+        }
+        if (customId === "casino_roulette") {
+            await interaction.reply({ content: "🎡 **ROULETTE**\n\nGunakan command:\n`!roulette 100 red`\n`!roulette 100 black`\n`!roulette 100 7`\n\n💰 Red/Black: x2\n💰 Nomor tepat: x36", flags: 64 });
+            return;
+        }
+        if (customId === "casino_dice") {
+            await interaction.reply({ content: "🎲 **DICE HIGH/LOW**\n\nGunakan command:\n`!dadu high 100`\n`!dadu low 100`\n\n🎯 High: 4-6\n🎯 Low: 1-3\n💰 Payout: x2", flags: 64 });
+            return;
+        }
+        
+        // Fishing menu buttons
+        if (customId === "menu_fish" || customId === "menu_index" || customId === "menu_convert" ||
+            customId === "menu_shop" || customId === "menu_inventory" || customId === "menu_sell" ||
+            customId === "menu_redeem" || customId === "menu_transfer" || customId === "menu_activity" ||
+            customId === "menu_leaderboard" || customId === "menu_points_leaderboard" || customId === "fish" ||
+            customId === "back_to_menu") {
+            const fishingModule = client.games.get('fishing');
+            if (fishingModule && fishingModule.handleButton) {
+                await fishingModule.handleButton(interaction, client);
+            }
+            return;
+        }
+        
+        // Game buttons (hunt/dungeon)
+        if (customId === "play_hunt") {
+            const huntModule = client.games.get('hunt');
+            if (huntModule && huntModule.executeGame) {
+                await huntModule.executeGame(interaction);
+            } else {
+                await interaction.reply({ content: "❌ Game hunt tidak tersedia! Gunakan command `!hunt`", flags: 64 });
+            }
+            return;
+        }
+        
+        if (customId === "play_dungeon") {
+            const dungeonModule = client.games.get('dungeon');
+            if (dungeonModule && dungeonModule.executeGame) {
+                await dungeonModule.executeGame(interaction);
+            } else {
+                await interaction.reply({ content: "❌ Game dungeon tidak tersedia! Gunakan command `!dungeon`", flags: 64 });
+            }
+            return;
+        }
+        
+        // Fallback
+        console.log(`⚠️ Unhandled button: ${customId}`);
+        await interaction.reply({ content: `❌ Tombol ${customId} belum terhubung!`, flags: 64 });
         return;
     }
     
     // Handle select menus
     if (interaction.isStringSelectMenu()) {
-        const handled = await gameHandler.handleSelectMenu(interaction, client);
-        if (!handled) {
-            console.log(`⚠️ Unhandled select menu: ${interaction.customId}`);
+        for (const [name, game] of client.games) {
+            if (game.handleSelectMenu && typeof game.handleSelectMenu === 'function') {
+                const handled = await game.handleSelectMenu(interaction, client);
+                if (handled) return;
+            }
         }
+        console.log(`⚠️ Unhandled select menu: ${interaction.customId}`);
         return;
     }
     
-    // Handle slash commands (jika ada)
+    // Handle slash commands
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (command) {
@@ -367,13 +386,8 @@ client.on('messageCreate', async message => {
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const commandName = args.shift().toLowerCase();
     
-    console.log(`Command received: ${commandName} from ${message.author.username}`);
-    
     const command = client.prefixCommands.get(commandName);
-    if (!command) {
-        console.log(`Command not found: ${commandName}`);
-        return;
-    }
+    if (!command) return;
     
     try {
         await command.executePrefix(message, args, client);
@@ -383,27 +397,24 @@ client.on('messageCreate', async message => {
     }
 });
 
-// Reaction handler for activity points
+// Reaction handler
 client.on('messageReactionAdd', async (reaction, user) => {
-    // Handle partial reaction
     if (reaction.partial) {
         try {
             await reaction.fetch();
         } catch (error) {
-            console.error('Error fetching reaction:', error);
             return;
         }
     }
-    
     await activityHandler.handleReactionActivity(reaction, user);
 });
 
-// Voice state handler for activity points
+// Voice state handler
 client.on('voiceStateUpdate', async (oldState, newState) => {
     await activityHandler.handleVoiceJoin(oldState, newState);
 });
 
-// Presence handler for activity points (opsional)
+// Presence handler
 client.on('presenceUpdate', async (oldPresence, newPresence) => {
     await activityHandler.handlePresenceUpdate(oldPresence, newPresence);
 });
@@ -417,7 +428,7 @@ process.on('uncaughtException', error => {
     console.error('Uncaught exception:', error);
 });
 
-// ================= LOGIN =================
+// Login
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ Connected to MongoDB'))
     .catch(err => console.error('❌ MongoDB connection error:', err));

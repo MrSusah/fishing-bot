@@ -5,12 +5,10 @@ module.exports = {
     description: 'Menu utama casino',
     
     async executePrefix(message, args, client) {
-        console.log('!casino command executed by', message.author.username);
-        
         const embed = new EmbedBuilder()
             .setColor('#ffd700')
             .setTitle('🎰 CASINO ROYALE 🎰')
-            .setDescription('Pilih permainan casino di bawah ini!')
+            .setDescription('Pilih permainan casino di bawah ini:')
             .addFields(
                 { name: '🪙 Coin Flip', value: '`!cf kepala 100` atau `!cf ekor 100`', inline: true },
                 { name: '✊ RPS', value: '`!rps rock 100` / `!rps paper 100` / `!rps scissors 100`', inline: true },
