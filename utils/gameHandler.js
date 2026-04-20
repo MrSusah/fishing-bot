@@ -7,30 +7,21 @@ async function handleModalSubmit(interaction, client) {
     return false;
 }
 
-async function showRewardMenu(interaction) {
+// Hapus fungsi showTransferInfo dan ganti dengan yang ini
+async function showTransferInfo(interaction) {
     const embed = new EmbedBuilder()
-        .setTitle("🎁 **REWARD SYSTEM** 🎁")
-        .setDescription("Klik tombol di bawah untuk klaim reward!")
-        .setColor(0xffaa00)
+        .setTitle("💸 **TRANSFER CREDITS**")
+        .setDescription("Transfer credits ke user lain!")
+        .setColor(0x00ff88)
         .addFields(
-            { name: "📅 Daily", value: "50-100 credits\n⏰ Cooldown: 24 jam", inline: true },
-            { name: "⏰ Hourly", value: "10-50 credits\n⏰ Cooldown: 1 jam", inline: true },
-            { name: "📆 Weekly", value: "200-500 credits\n⏰ Cooldown: 7 hari", inline: true },
-            { name: "🌙 Monthly", value: "1000-2000 credits\n⏰ Cooldown: 30 hari", inline: true },
-            { name: "🎉 Yearly", value: "3000-5000 credits\n⏰ Cooldown: 365 hari", inline: true }
+            { name: "📝 **Cara Penggunaan**", value: "`!transfer @user <jumlah>`", inline: false },
+            { name: "📌 **Contoh**", value: "`!transfer @Kame 1000`", inline: false },
+            { name: "⚠️ **Aturan**", value: "• Minimal transfer 100 credits\n• Tidak bisa transfer ke diri sendiri", inline: false }
         )
-        .setFooter({ text: "Klik tombol reward yang ingin diklaim!" })
+        .setFooter({ text: "Gunakan command di chat untuk transfer!" })
         .setTimestamp();
     
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("reward_daily").setLabel("📅 Daily").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("reward_hourly").setLabel("⏰ Hourly").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("reward_weekly").setLabel("📆 Weekly").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("reward_monthly").setLabel("🌙 Monthly").setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId("reward_yearly").setLabel("🎉 Yearly").setStyle(ButtonStyle.Primary)
-    );
-    
-    return interaction.reply({ embeds: [embed], components: [row], flags: 64 });
+    return interaction.reply({ embeds: [embed], flags: 64 });
 }
 
 // Tambahkan handler untuk reward buttons
