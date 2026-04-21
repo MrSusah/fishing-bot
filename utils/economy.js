@@ -21,20 +21,22 @@ class EconomyManager {
         }
     }
     
-    static async addCredits(userId, amount, source = "unknown") {
+    static async addCredits(userId, amount) {
         if (amount <= 0) return false;
         
         try {
-            const result = await User.findOneAndUpdate(
-                { userId },
-                { 
-                    $inc: { credits: amount },
-                    $setOnInsert: { userId, createdAt: new Date() },
-                    $set: { updatedAt: new Date() }
-                },
-                { upsert: true, new: true }
-            );
-            console.log(`✅ Added ${amount} credits to ${userId}. New balance: ${result?.credits || 0}`);
+            // Cari user, jika tidak ada buat baru
+            let user = await User.findOne({ userId });
+            if (!user) {
+                user = new User({ userId, credits: 0, points: 0 });
+                await user.save();
+            }
+            
+            // Update credits
+            user.credits += amount;
+            await user.save();
+            
+            console.log(`✅ Added ${amount} credits to ${userId}. New balance: ${user.credits}`);
             return true;
         } catch (error) {
             console.error('Error adding credits:', error);
@@ -42,25 +44,25 @@ class EconomyManager {
         }
     }
     
-    static async removeCredits(userId, amount, source = "unknown") {
+    static async removeCredits(userId, amount) {
         if (amount <= 0) return false;
         
         try {
             const user = await User.findOne({ userId });
-            if (!user || user.credits < amount) {
-                console.log(`❌ Insufficient credits for ${userId}. Balance: ${user?.credits || 0}, Required: ${amount}`);
+            if (!user) {
+                console.log(`❌ User ${userId} not found`);
                 return false;
             }
             
-            const result = await User.findOneAndUpdate(
-                { userId },
-                { 
-                    $inc: { credits: -amount },
-                    $set: { updatedAt: new Date() }
-                },
-                { new: true }
-            );
-            console.log(`✅ Removed ${amount} credits from ${userId}. New balance: ${result?.credits || 0}`);
+            if (user.credits < amount) {
+                console.log(`❌ Insufficient credits for ${userId}. Balance: ${user.credits}, Required: ${amount}`);
+                return false;
+            }
+            
+            user.credits -= amount;
+            await user.save();
+            
+            console.log(`✅ Removed ${amount} credits from ${userId}. New balance: ${user.credits}`);
             return true;
         } catch (error) {
             console.error('Error removing credits:', error);
@@ -68,23 +70,21 @@ class EconomyManager {
         }
     }
     
-    static async addPoints(userId, amount, source = "unknown") {
+    static async addPoints(userId, amount) {
         if (amount <= 0) return false;
         
         try {
-            await User.findOneAndUpdate(
-                { userId },
-                { 
-                    $inc: { 
-                        points: amount,
-                        seasonPoints: amount,
-                        activityPoints: amount
-                    },
-                    $setOnInsert: { userId, createdAt: new Date() },
-                    $set: { updatedAt: new Date() }
-                },
-                { upsert: true }
-            );
+            let user = await User.findOne({ userId });
+            if (!user) {
+                user = new User({ userId, credits: 0, points: 0 });
+                await user.save();
+            }
+            
+            user.points += amount;
+            user.seasonPoints += amount;
+            user.activityPoints += amount;
+            await user.save();
+            
             return true;
         } catch (error) {
             console.error('Error adding points:', error);
@@ -92,37 +92,19 @@ class EconomyManager {
         }
     }
     
-    static async removePoints(userId, amount, source = "unknown") {
+    static async removePoints(userId, amount) {
         if (amount <= 0) return false;
         
         try {
-            const points = await this.getPoints(userId);
-            if (points < amount) return false;
+            const user = await User.findOne({ userId });
+            if (!user || user.points < amount) return false;
             
-            await User.findOneAndUpdate(
-                { userId },
-                { 
-                    $inc: { points: -amount },
-                    $set: { updatedAt: new Date() }
-                }
-            );
+            user.points -= amount;
+            await user.save();
             return true;
         } catch (error) {
             console.error('Error removing points:', error);
             return false;
-        }
-    }
-    
-    static async getUser(userId) {
-        try {
-            let user = await User.findOne({ userId });
-            if (!user) {
-                user = await User.create({ userId });
-            }
-            return user;
-        } catch (error) {
-            console.error('Error getting user:', error);
-            return null;
         }
     }
 }

@@ -7,6 +7,8 @@ module.exports = {
     description: 'Coin Flip game',
     
     async executePrefix(message, args, client) {
+        console.log(`[CF] Command executed by ${message.author.username}`);
+        
         // Validasi channel
         if (!channelValidator.validateCasinoChannel(message.channelId) && message.channelId !== channelValidator.TEST_CHANNEL_ID) {
             return message.reply(`❌ Game CF hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
@@ -29,6 +31,8 @@ module.exports = {
         const userId = message.author.id;
         const balance = await economy.getBalance(userId);
         
+        console.log(`[CF] User ${message.author.username} balance: ${balance}, bet: ${bet}`);
+        
         if (balance < bet) {
             return message.reply(`❌ Saldo tidak cukup! Kamu punya ${balance} credits`);
         }
@@ -38,10 +42,14 @@ module.exports = {
         const isWin = winChance && choice === result;
         const winAmount = isWin ? bet * 2 : 0;
         
+        console.log(`[CF] Choice: ${choice}, Result: ${result}, Win: ${isWin}, WinAmount: ${winAmount}`);
+        
         if (isWin) {
-            await economy.addCredits(userId, winAmount);
+            const success = await economy.addCredits(userId, winAmount);
+            console.log(`[CF] Add credits success: ${success}`);
         } else {
-            await economy.removeCredits(userId, bet);
+            const success = await economy.removeCredits(userId, bet);
+            console.log(`[CF] Remove credits success: ${success}`);
         }
         
         const newBalance = await economy.getBalance(userId);
@@ -60,5 +68,6 @@ module.exports = {
             .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
         
         await message.reply({ embeds: [embed] });
+        console.log(`[CF] Command completed for ${message.author.username}`);
     }
 };

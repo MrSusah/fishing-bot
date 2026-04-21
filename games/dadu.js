@@ -9,6 +9,8 @@ module.exports = {
     description: 'Dice High/Low game',
     
     async executePrefix(message, args, client) {
+        console.log(`[DADU] Command executed by ${message.author.username}`);
+        
         if (!channelValidator.validateCasinoChannel(message.channelId) && message.channelId !== channelValidator.TEST_CHANNEL_ID) {
             return message.reply(`❌ Game Dadu hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
         }

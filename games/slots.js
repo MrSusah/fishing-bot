@@ -13,6 +13,8 @@ module.exports = {
     description: 'Slot machine game',
     
     async executePrefix(message, args, client) {
+        console.log(`[SLOTS] Command executed by ${message.author.username}`);
+        
         if (!channelValidator.validateCasinoChannel(message.channelId) && message.channelId !== channelValidator.TEST_CHANNEL_ID) {
             return message.reply(`❌ Game Slots hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
         }

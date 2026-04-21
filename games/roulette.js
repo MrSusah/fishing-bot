@@ -16,6 +16,8 @@ module.exports = {
     description: 'Roulette game',
     
     async executePrefix(message, args, client) {
+        console.log(`[ROULETTE] Command executed by ${message.author.username}`);
+        
         if (!channelValidator.validateCasinoChannel(message.channelId) && message.channelId !== channelValidator.TEST_CHANNEL_ID) {
             return message.reply(`❌ Game Roulette hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
         }
@@ -66,27 +68,27 @@ module.exports = {
             winText = `Nomor ${result}!`;
         }
         
-        let embed = new EmbedBuilder()
+        if (multiplier > 0) {
+            const winAmount = amount * multiplier;
+            await economy.addCredits(userId, winAmount);
+        } else {
+            await economy.removeCredits(userId, amount);
+        }
+        
+        const newBalance = await economy.getBalance(userId);
+        
+        const embed = new EmbedBuilder()
             .setTitle("🎡 **ROULETTE** 🎡")
             .setColor(multiplier > 0 ? 0x00ff00 : 0xff0000)
             .addFields(
                 { name: "🎲 **Taruhan**", value: side.toUpperCase(), inline: true },
                 { name: "🎯 **Hasil**", value: result.toString(), inline: true },
-                { name: "🎨 **Warna**", value: resultColor.toUpperCase(), inline: true }
+                { name: "🎨 **Warna**", value: resultColor.toUpperCase(), inline: true },
+                { name: "💰 **Hasil**", value: multiplier > 0 ? `✅ MENANG! +${amount * multiplier} credits (x${multiplier})` : `❌ KALAH! -${amount} credits`, inline: false },
+                { name: "💎 **Saldo Akhir**", value: `${newBalance} credits`, inline: true }
             )
+            .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() })
             .setTimestamp();
-        
-        if (multiplier > 0) {
-            const winAmount = amount * multiplier;
-            await economy.addCredits(userId, winAmount);
-            embed.addFields({ name: "✅ **MENANG!**", value: `${winText} Kamu menang **${winAmount.toLocaleString()}** credits! (x${multiplier})`, inline: false });
-        } else {
-            await economy.removeCredits(userId, amount);
-            embed.addFields({ name: "❌ **KALAH!**", value: `Kamu kehilangan **${amount.toLocaleString()}** credits!`, inline: false });
-        }
-        
-        const newBalance = await economy.getBalance(userId);
-        embed.setFooter({ text: `💰 Saldo sekarang: ${newBalance.toLocaleString()} credits` });
         
         await message.reply({ embeds: [embed] });
     }

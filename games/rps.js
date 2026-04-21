@@ -4,12 +4,15 @@ const channelValidator = require('../utils/channelValidator');
 
 const choices = ['rock', 'paper', 'scissors'];
 const emojis = { rock: '🪨', paper: '📄', scissors: '✂️' };
+const indonesian = { rock: 'BATU', paper: 'KERTAS', scissors: 'GUNTING' };
 
 module.exports = {
     name: 'rps',
     description: 'Rock Paper Scissors game',
     
     async executePrefix(message, args, client) {
+        console.log(`[RPS] Command executed by ${message.author.username}`);
+        
         if (!channelValidator.validateCasinoChannel(message.channelId) && message.channelId !== channelValidator.TEST_CHANNEL_ID) {
             return message.reply(`❌ Game RPS hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
         }
@@ -61,8 +64,8 @@ module.exports = {
             .setColor(isWin ? '#00ff00' : isDraw ? '#ffff00' : '#ff0000')
             .setTitle('✊ ROCK PAPER SCISSORS ✊')
             .addFields(
-                { name: 'Kamu', value: `${emojis[playerChoice]} ${playerChoice.toUpperCase()}`, inline: true },
-                { name: 'Bot', value: `${emojis[botChoice]} ${botChoice.toUpperCase()}`, inline: true },
+                { name: 'Kamu', value: `${emojis[playerChoice]} ${indonesian[playerChoice]}`, inline: true },
+                { name: 'Bot', value: `${emojis[botChoice]} ${indonesian[botChoice]}`, inline: true },
                 { name: 'Hasil', value: isWin ? '✅ MENANG!' : isDraw ? '🤝 SERI!' : '❌ KALAH!', inline: true },
                 { name: 'Taruhan', value: `${bet} credits`, inline: true },
                 { name: 'Hasil Akhir', value: isWin ? `+${bet} credits` : isDraw ? '+0 credits' : `-${bet} credits`, inline: true },
