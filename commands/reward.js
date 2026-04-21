@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { EmbedBuilder } = require("discord.js");
 const { User, Cooldown } = require("../database/mongo");
 
 module.exports = {
@@ -6,38 +6,30 @@ module.exports = {
     description: "Klaim reward harian/mingguan/bulanan",
     
     async executePrefix(message, args, client) {
-        if (!args[0]) {
+        const subCommand = args[0]?.toLowerCase();
+        
+        if (!subCommand) {
             const embed = new EmbedBuilder()
                 .setTitle("🎁 **REWARD SYSTEM** 🎁")
                 .setDescription("Pilih jenis reward yang ingin diklaim:")
                 .setColor(0xffaa00)
                 .addFields(
-                    { name: "📅 Daily", value: "50-100 credits\n⏰ Cooldown: 24 jam", inline: true },
-                    { name: "⏰ Hourly", value: "10-50 credits\n⏰ Cooldown: 1 jam", inline: true },
-                    { name: "📆 Weekly", value: "200-500 credits\n⏰ Cooldown: 7 hari", inline: true },
-                    { name: "🌙 Monthly", value: "1000-2000 credits\n⏰ Cooldown: 30 hari", inline: true },
-                    { name: "🎉 Yearly", value: "3000-5000 credits\n⏰ Cooldown: 365 hari", inline: true }
+                    { name: "📅 Daily", value: "`!reward daily`\n50-100 credits\n⏰ Cooldown: 24 jam", inline: true },
+                    { name: "⏰ Hourly", value: "`!reward hourly`\n10-50 credits\n⏰ Cooldown: 1 jam", inline: true },
+                    { name: "📆 Weekly", value: "`!reward weekly`\n200-500 credits\n⏰ Cooldown: 7 hari", inline: true },
+                    { name: "🌙 Monthly", value: "`!reward monthly`\n1000-2000 credits\n⏰ Cooldown: 30 hari", inline: true },
+                    { name: "🎉 Yearly", value: "`!reward yearly`\n3000-5000 credits\n⏰ Cooldown: 365 hari", inline: true }
                 )
-                .setFooter({ text: "Gunakan !reward daily/hourly/weekly/monthly/yearly" })
+                .setFooter({ text: "Gunakan !reward <jenis> untuk klaim!" })
                 .setTimestamp();
-
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder().setCustomId("reward_daily").setLabel("📅 Daily").setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId("reward_hourly").setLabel("⏰ Hourly").setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId("reward_weekly").setLabel("📆 Weekly").setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId("reward_monthly").setLabel("🌙 Monthly").setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId("reward_yearly").setLabel("🎉 Yearly").setStyle(ButtonStyle.Danger)
-                );
-
-            await message.reply({ embeds: [embed], components: [row] });
-            return;
+            
+            return message.reply({ embeds: [embed] });
         }
         
         const userId = message.author.id;
         let cooldownTime, rewardMin, rewardMax, rewardName;
         
-        switch (args[0].toLowerCase()) {
+        switch (subCommand) {
             case "daily":
                 cooldownTime = 86400000;
                 rewardMin = 50;
@@ -73,7 +65,7 @@ module.exports = {
         }
         
         try {
-            const cooldown = await Cooldown.findOne({ userId, command: args[0].toLowerCase() });
+            const cooldown = await Cooldown.findOne({ userId, command: subCommand });
             
             if (cooldown) {
                 const timeLeft = cooldownTime - (Date.now() - new Date(cooldown.lastUsed).getTime());
@@ -97,7 +89,7 @@ module.exports = {
             );
             
             await Cooldown.findOneAndUpdate(
-                { userId, command: args[0].toLowerCase() },
+                { userId, command: subCommand },
                 { lastUsed: new Date() },
                 { upsert: true }
             );

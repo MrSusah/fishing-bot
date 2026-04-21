@@ -10,13 +10,12 @@ module.exports = {
     description: 'Rock Paper Scissors game',
     
     async executePrefix(message, args, client) {
-        // Validasi channel
-        if (!channelValidator.validateCasinoChannel(message.channelId)) {
+        if (!channelValidator.validateCasinoChannel(message.channelId) && message.channelId !== channelValidator.TEST_CHANNEL_ID) {
             return message.reply(`❌ Game RPS hanya bisa dimainkan di channel <#${channelValidator.CASINO_CHANNEL_ID}>!`);
         }
         
         if (args.length < 2) {
-            return message.reply('❌ Usage: !rps <rock/paper/scissors> <amount>');
+            return message.reply('❌ Usage: !rps <rock/paper/scissors> <amount>\nContoh: !rps rock 100');
         }
         
         const playerChoice = args[0].toLowerCase();
@@ -37,22 +36,17 @@ module.exports = {
         }
         
         const botChoice = choices[Math.floor(Math.random() * choices.length)];
-        let result = '';
         let isWin = false;
         let isDraw = false;
         
         if (playerChoice === botChoice) {
-            result = 'draw';
             isDraw = true;
         } else if (
             (playerChoice === 'rock' && botChoice === 'scissors') ||
             (playerChoice === 'paper' && botChoice === 'rock') ||
             (playerChoice === 'scissors' && botChoice === 'paper')
         ) {
-            result = 'win';
             isWin = true;
-        } else {
-            result = 'lose';
         }
         
         if (isWin) {
@@ -60,6 +54,8 @@ module.exports = {
         } else if (!isDraw) {
             await economy.removeCredits(userId, bet);
         }
+        
+        const newBalance = await economy.getBalance(userId);
         
         const embed = new EmbedBuilder()
             .setColor(isWin ? '#00ff00' : isDraw ? '#ffff00' : '#ff0000')
@@ -69,7 +65,8 @@ module.exports = {
                 { name: 'Bot', value: `${emojis[botChoice]} ${botChoice.toUpperCase()}`, inline: true },
                 { name: 'Hasil', value: isWin ? '✅ MENANG!' : isDraw ? '🤝 SERI!' : '❌ KALAH!', inline: true },
                 { name: 'Taruhan', value: `${bet} credits`, inline: true },
-                { name: 'Hasil Akhir', value: isWin ? `+${bet} credits` : isDraw ? '+0 credits' : `-${bet} credits`, inline: true }
+                { name: 'Hasil Akhir', value: isWin ? `+${bet} credits` : isDraw ? '+0 credits' : `-${bet} credits`, inline: true },
+                { name: 'Saldo Akhir', value: `${newBalance} credits`, inline: true }
             )
             .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
         
